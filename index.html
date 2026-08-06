@@ -807,55 +807,43 @@ $browseSearch.addEventListener("input", () => renderPlayerList($browseSearch.val
 // ============ STATS & DAILY ============
 function dailyTarget() { const d = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Shanghai"})).toISOString().slice(0,10); let h=0; for(let i=0;i<d.length;i++)h=((h<<5)-h+d.charCodeAt(i))|0; return PLAYERS[Math.abs(h)%PLAYERS.length]; }
 function dailyDateStr() { return new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Shanghai"})).toISOString().slice(0,10); }
-function dailyCountdown() { const n=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Shanghai"})); const mid=new Date(n);mid.setHours(24,0,0,0); const ms=mid-n; const h=Math.floor(ms/3600000); const m=Math.floor((ms%3600000)/60000); return h+"时"+m+"分"; }
-
+function dailyCountdown() { const n=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Shanghai"})); const mid=new Date(n);mid.setHours(24,0,0,0); const ms=mid-n; return Math.floor(ms/3600000)+"时"+Math.floor((ms%3600000)/60000)+"分"; }
 async function recordGame(mode,won,guessesUsed) {
-  return;
-  const col=(mode==="single"?"single":mode==="multi"?"multi":"daily");
+  try{const col=mode==="single"?"single":mode==="multi"?"multi":"daily";
   const data=await sb_get("player_stats?player_id=eq."+encodeURIComponent(mpPlayerId)+"&select=*");
   const row=data||{player_id:mpPlayerId,single_wins:0,single_total:0,multi_wins:0,multi_total:0,daily_wins:0,daily_total:0};
-  row[col+"_wins"]+=(won?1:0); row[col+"_total"]+=1;
+  row[col+"_wins"]+=(won?1:0);row[col+"_total"]+=1;
   await sb_upsert("player_stats",row,"player_id=eq."+encodeURIComponent(mpPlayerId));
-  if(mode==="daily"){ const ds=dailyDateStr();
-    await sb_upsert("daily_plays",{player_id:mpPlayerId,play_date:ds,won,guesses_used:guessesUsed,guesses_json:window._lastDailyGuesses||[]},"player_id=eq."+encodeURIComponent(mpPlayerId)+"&play_date=eq."+ds);
-  }
-  fetchStats();
+  if(mode==="daily"){ const ds=dailyDateStr(); await sb_upsert("daily_plays",{player_id:mpPlayerId,play_date:ds,won,guesses_used:guessesUsed,guesses_json:window._lastDailyGuesses||[]},"player_id=eq."+encodeURIComponent(mpPlayerId)+"&play_date=eq."+ds); }
+  fetchStats();}catch(e){}
 }
 async function fetchStats() {
-  if(!sb){ document.getElementById("daily-stats-bar")&&(document.getElementById("daily-stats-bar").innerHTML=""); return; }
-  const data=await sb_get("player_stats?player_id=eq."+encodeURIComponent(mpPlayerId)+"&select=*");
+  try{const data=await sb_get("player_stats?player_id=eq."+encodeURIComponent(mpPlayerId)+"&select=*");
   const s=data||{single_wins:0,single_total:0,multi_wins:0,multi_total:0,daily_wins:0,daily_total:0};
   const fmt=(w,t)=>t?Math.round(w/t*100)+"%":"-";
-  const bar=document.getElementById("daily-stats-bar")||document.getElementById("game-stats-bar"); if(!bar) return;
-  bar.innerHTML=`<div class="stats-item"><div class="label">🎮 单机</div><div class="value">${fmt(s.single_wins,s.single_total)}</div><div class="rate">${s.single_wins}/${s.single_total}</div></div><div class="stats-item"><div class="label">🌐 联机</div><div class="value">${fmt(s.multi_wins,s.multi_total)}</div><div class="rate">${s.multi_wins}/${s.multi_total}</div></div><div class="stats-item"><div class="label">📅 每日</div><div class="value">${fmt(s.daily_wins,s.daily_total)}</div><div class="rate">${s.daily_wins}/${s.daily_total}</div></div>`;
+  const bar=document.getElementById("daily-stats-bar")||document.getElementById("game-stats-bar");if(!bar)return;
+  bar.innerHTML=`<div class="stats-item"><div class="label">🎮 单机</div><div class="value">${fmt(s.single_wins,s.single_total)}</div><div class="rate">${s.single_wins}/${s.single_total}</div></div><div class="stats-item"><div class="label">🌐 联机</div><div class="value">${fmt(s.multi_wins,s.multi_total)}</div><div class="rate">${s.multi_wins}/${s.multi_total}</div></div><div class="stats-item"><div class="label">📅 每日</div><div class="value">${fmt(s.daily_wins,s.daily_total)}</div><div class="rate">${s.daily_wins}/${s.daily_total}</div></div>`;}catch(e){}
 }
-async function dailyInit() { fetchStats(); dailyRender(); }
-async function dailyRender() {
-  const c=document.getElementById("daily-content"); if(!c) return;
-  const t=dailyTarget(); const ds=dailyDateStr();
-  window._dailyTarget=t; window._dailyGuesses=[]; window._dailyDone=false;
-  // localStorage check first (instant)
-  const localKey="daily_"+ds; if(localStorage.getItem(localKey)){ c.innerHTML=`<div class="daily-status daily-answered"><h3>✅ 今日已完成</h3><p>答案是 <strong>${t.name}</strong>（${t.team} · ${t.position}）</p><p class="countdown">⏰ ${dailyCountdown()} 后刷新</p></div>`; return; }
-  // render game UI
-  c.innerHTML=`<div class="daily-status"><h3>📅 今日挑战</h3><p style="color:var(--text2);font-size:.85rem">每天每人仅一次机会，全球玩家同一天猜同一个球员</p><p class="countdown">⏰ 剩余时间: ${dailyCountdown()}</p></div><div class="search-wrap"><input type="text" class="search-input" id="daily-input" placeholder="输入球员名搜索..." autocomplete="off"><div class="search-dropdown" id="daily-dropdown"></div></div><div class="game-table-wrap"><table class="game-table" id="daily-board"><thead><tr><th>球员</th><th>队伍</th><th>位置</th><th>年龄</th><th>总冠军</th><th>MVP</th><th>FMVP</th><th>最佳阵容</th><th>状态</th></tr></thead><tbody id="daily-body"></tbody></table></div><div style="text-align:center;font-size:.8rem;color:var(--text2)">猜测: <strong style="color:var(--accent)" id="daily-count">0/8</strong></div>`;
-  const inp=document.getElementById("daily-input"); const dd=document.getElementById("daily-dropdown");
-  inp.addEventListener("input",()=>{ const q=inp.value.trim(); dd.innerHTML=""; if(!q){dd.classList.remove("show");return;} const r=searchPlayers(q); if(!r.length){dd.innerHTML='<div class="no-results">未找到</div>';dd.classList.add("show");return;} dd.innerHTML=r.map(p=>`<div class="search-item" data-name="${p.name}"><span class="name">${p.name}</span><span class="team">${p.team} · ${(p.points||0).toLocaleString()}分</span></div>`).join("");dd.classList.add("show");});
-  dd.addEventListener("click",e=>{ const item=e.target.closest(".search-item"); if(!item) return; const p=PLAYERS.find(pl=>pl.name===item.dataset.name); if(p) dailyGuess(p);});
-  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ const r=searchPlayers(inp.value.trim()); if(r.length)dailyGuess(r[0]); }});
-  // async Supabase check (don't block)
-  setTimeout(async()=>{try{const data=await sb_get("daily_plays?player_id=eq."+encodeURIComponent(mpPlayerId)+"&play_date=eq."+ds+"&select=*");if(data){window._dailyDone=true;c.innerHTML=`<div class="daily-status daily-answered"><h3>✅ 今日已完成</h3><p>答案是 <strong>${t.name}</strong>（${t.team} · ${t.position}）</p><p style="font-size:.8rem;color:var(--text2)">你用了 ${data.guesses_used}/8 次，${data.won?"🎉 猜中了！":"❌ 未猜中"}</p><p class="countdown">⏰ ${dailyCountdown()} 后刷新</p></div>`;}}catch(e){}},200);
+function dailyInit() { fetchStats(); dailyRender(); }
+function dailyRender() {
+  const c=document.getElementById("daily-content");if(!c)return;const t=dailyTarget();const ds=dailyDateStr();const lk="nba_daily_"+ds;
+  if(localStorage.getItem(lk)){c.innerHTML=`<div class="daily-status daily-answered"><h3>✅ 今日已完成</h3><p>答案是 <strong>${t.name}</strong>（${t.team} · ${t.position}）</p><p class="countdown">⏰ ${dailyCountdown()} 后刷新</p><p style="font-size:.75rem;color:var(--text2);margin-top:8px">历史得分榜第 ${t.rank} 名 · ${t.points.toLocaleString()} 分</p></div>`;return;}
+  window._dt=t;window._dg=[];window._dd=false;
+  c.innerHTML=`<div class="daily-status"><h3>📅 今日挑战</h3><p style="color:var(--text2);font-size:.85rem">每天每人仅一次机会，全球所有玩家同一天猜同一个球员</p><p class="countdown">⏰ 剩余时间: ${dailyCountdown()}</p></div><div class="search-wrap"><input type="text" class="search-input" id="d-inp" placeholder="输入球员名搜索..." autocomplete="off"><div class="search-dropdown" id="d-dd"></div></div><div class="game-table-wrap"><table class="game-table" id="d-bd"><thead><tr><th>球员</th><th>队伍</th><th>位置</th><th>年龄</th><th>总冠军</th><th>MVP</th><th>FMVP</th><th>最佳阵容</th><th>状态</th></tr></thead><tbody id="d-tb"></tbody></table></div><div style="text-align:center;font-size:.8rem;color:var(--text2)">猜测: <strong style="color:var(--accent)" id="d-ct">0/8</strong></div>`;
+  const inp=document.getElementById("d-inp"),dd=document.getElementById("d-dd");
+  inp.addEventListener("input",()=>{const q=inp.value.trim();if(!q){dd.classList.remove("show");dd.innerHTML="";return;}const r=searchPlayers(q);dd.innerHTML=r.length?r.map(p=>`<div class="search-item" data-n="${p.name}"><span class="name">${p.name}</span><span class="team">${p.team}</span></div>`).join(""):'<div class="no-results">未找到</div>';dd.classList.add("show");});
+  dd.addEventListener("click",e=>{const el=e.target.closest(".search-item");if(!el)return;const p=PLAYERS.find(x=>x.name===el.dataset.n);if(p)dGuess(p);});
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){const r=searchPlayers(inp.value.trim());if(r.length)dGuess(r[0]);}});
+  document.addEventListener("click",function dc(e){if(!inp.contains(e.target)&&!dd.contains(e.target))dd.classList.remove("show");});
 }
-function dailyGuess(player) {
-  if(window._dailyDone) return; const g=window._dailyGuesses||[]; const t=window._dailyTarget; if(!t) return;
-  if(g.length>=8||g.some(x=>x.name===player.name)) return; g.push(player); window._dailyGuesses=g;
-  const fb=compareGuess(player,t); document.getElementById("daily-count").textContent=g.length+"/8";
-  document.getElementById("daily-body").innerHTML=g.map((p,i)=>{ const f=compareGuess(p,t); return `<tr class="${i===g.length-1?'row-latest':''} ${f.correct?'row-correct':''}"><td class="name-cell ${f.correct?'correct':'wrong'}">${f.nickname}</td>${renderCell(f.attributes.team)}${renderCell(f.attributes.position)}${renderCell(f.attributes.age)}${renderCell(f.attributes.championships)}${renderCell(f.attributes.mvp)}${renderCell(f.attributes.fmvp)}${renderCell(f.attributes.allNba)}${renderCell(f.attributes.status)}</tr>`;}).join("");
-  document.getElementById("daily-input").value=""; document.getElementById("daily-dropdown").classList.remove("show");
-  if(fb.correct){ window._dailyDone=true; window._lastDailyGuesses=g; localStorage.setItem("daily_"+dailyDateStr(),"won"); recordGame("daily",true,g.length); setTimeout(()=>dailyRender(),500); return; }
-  if(g.length>=8){ window._dailyDone=true; window._lastDailyGuesses=g; localStorage.setItem("daily_"+dailyDateStr(),"lost"); recordGame("daily",false,8); setTimeout(()=>dailyRender(),500); }
+function dGuess(p){
+  if(window._dd||!window._dt)return;const g=window._dg;if(g.length>=8||g.some(x=>x.name===p.name))return;g.push(p);const t=window._dt,fb=compareGuess(p,t);
+  document.getElementById("d-ct").textContent=g.length+"/8";
+  document.getElementById("d-tb").innerHTML=g.map((x,i)=>{const f=compareGuess(x,t);return `<tr class="${i===g.length-1?"row-latest":""} ${f.correct?"row-correct":""}"><td class="name-cell ${f.correct?"correct":"wrong"}">${f.nickname}</td>${renderCell(f.attributes.team)}${renderCell(f.attributes.position)}${renderCell(f.attributes.age)}${renderCell(f.attributes.championships)}${renderCell(f.attributes.mvp)}${renderCell(f.attributes.fmvp)}${renderCell(f.attributes.allNba)}${renderCell(f.attributes.status)}</tr>`}).join("");
+  document.getElementById("d-inp").value="";document.getElementById("d-dd").classList.remove("show");
+  if(fb.correct){window._dd=true;localStorage.setItem("nba_daily_"+dailyDateStr(),"won");setTimeout(()=>dailyRender(),500);return;}
+  if(g.length>=8){window._dd=true;localStorage.setItem("nba_daily_"+dailyDateStr(),"lost");setTimeout(()=>dailyRender(),500);}
 }
-
-
 // ============ SUPABASE via fetch (no external deps) ============
 const SUPABASE_URL = "https://bufvapllekiobkirndyj.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZnZhcGxsZWtpb2JraXJuZHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDI3OTIsImV4cCI6MjEwMTYxODc5Mn0.40q4bwEZZIkazJ-v-wJpwN3NbkeILCGwuns3ii9fxPE";
