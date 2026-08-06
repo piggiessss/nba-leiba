@@ -884,9 +884,6 @@ function mpStartPoll(roomId) {
 }
 function mpStopPoll(){if(mpPollTimer){clearInterval(mpPollTimer);mpPollTimer=null;}}
 // ============ MULTIPLAYER ============
-const SUPABASE_URL = "https://bufvapllekiobkirndyj.supabase.co";  // ← 填入你的 Supabase 项目 URL
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZnZhcGxsZWtpb2JraXJuZHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDI3OTIsImV4cCI6MjEwMTYxODc5Mn0.40q4bwEZZIkazJ-v-wJpwN3NbkeILCGwuns3ii9fxPE";  // ← 填入你的 Supabase anon key
-let sb = null;
 let mpRoom = null, mpPlayerNum = null, mpTarget = null;
 let mpGuesses = [], mpOppGuesses = 0, mpMyWon = false, mpOppWon = false;
 
