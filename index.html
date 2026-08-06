@@ -833,11 +833,16 @@ async function dailyInit() { fetchStats(); dailyRender(); }
 async function dailyRender() {
   const c=document.getElementById("daily-content"); if(!c) return;
   const t=dailyTarget(); const ds=dailyDateStr();
-  if(!sb){ c.innerHTML=`<p style="text-align:center;color:var(--text2);padding:20px">需要配置 Supabase 才能使用每日挑战</p>`; return; }
-  const data=await sb_get("daily_plays?player_id=eq."+encodeURIComponent(mpPlayerId)+"&play_date=eq."+ds+"&select=*");
-  if(data){ c.innerHTML=`<div class="daily-status daily-answered"><h3>✅ 今日已完成</h3><p>答案是 <strong>${t.name}</strong>（${t.team} · ${t.position}）</p><p style="font-size:.8rem;color:var(--text2)">你用了 ${data.guesses_used}/8 次，${data.won?"🎉 猜中了！":"❌ 未猜中"}</p><p class="countdown">⏰ ${dailyCountdown()} 后刷新</p></div>`; return; }
+  // always show game UI first
   window._dailyTarget=t; window._dailyGuesses=[]; window._dailyDone=false;
-  c.innerHTML=`<div class="daily-status"><h3>📅 今日挑战</h3><p style="color:var(--text2);font-size:.85rem">每天每人仅一次机会，全球玩家同一天猜同一个球员</p><p class="countdown">⏰ 剩余时间: ${dailyCountdown()}</p></div><div class="search-wrap"><input type="text" class="search-input" id="daily-input" placeholder="输入球员名..." autocomplete="off"><div class="search-dropdown" id="daily-dropdown"></div></div><div class="game-table-wrap"><table class="game-table" id="daily-board"><thead><tr><th>球员</th><th>队伍</th><th>位置</th><th>年龄</th><th>总冠军</th><th>MVP</th><th>FMVP</th><th>最佳阵容</th><th>状态</th></tr></thead><tbody id="daily-body"></tbody></table></div><div style="text-align:center;font-size:.8rem;color:var(--text2)">猜测: <strong style="color:var(--accent)" id="daily-count">0/8</strong></div>`;
+  // try supabase check
+  try {
+    const data=await sb_get("daily_plays?player_id=eq."+encodeURIComponent(mpPlayerId)+"&play_date=eq."+ds+"&select=*");
+    if(data){ c.innerHTML=`<div class="daily-status daily-answered"><h3>✅ 今日已完成</h3><p>答案是 <strong>${t.name}</strong>（${t.team} · ${t.position}）</p><p style="font-size:.8rem;color:var(--text2)">你用了 ${data.guesses_used}/8 次，${data.won?"🎉 猜中了！":"❌ 未猜中"}</p><p class="countdown">⏰ ${dailyCountdown()} 后刷新</p></div>`; return; }
+  }catch(e){}
+  // check localStorage fallback
+  const localKey="daily_"+ds; if(localStorage.getItem(localKey)){ c.innerHTML=`<div class="daily-status daily-answered"><h3>✅ 今日已完成</h3><p>答案是 <strong>${t.name}</strong>（${t.team} · ${t.position}）</p><p style="font-size:.8rem;color:var(--text2)">今天已经猜过了</p><p class="countdown">⏰ ${dailyCountdown()} 后刷新</p></div>`; return; }
+  c.innerHTML=`<div class="daily-status"><h3>📅 今日挑战</h3><p style="color:var(--text2);font-size:.85rem">每天每人仅一次机会，全球玩家同一天猜同一个球员</p><p class="countdown">⏰ 剩余时间: ${dailyCountdown()}</p></div><div class="search-wrap"><input type="text" class="search-input" id="daily-input" placeholder="输入球员名搜索..." autocomplete="off"><div class="search-dropdown" id="daily-dropdown"></div></div><div class="game-table-wrap"><table class="game-table" id="daily-board"><thead><tr><th>球员</th><th>队伍</th><th>位置</th><th>年龄</th><th>总冠军</th><th>MVP</th><th>FMVP</th><th>最佳阵容</th><th>状态</th></tr></thead><tbody id="daily-body"></tbody></table></div><div style="text-align:center;font-size:.8rem;color:var(--text2)">猜测: <strong style="color:var(--accent)" id="daily-count">0/8</strong></div>`;
   const inp=document.getElementById("daily-input"); const dd=document.getElementById("daily-dropdown");
   inp.addEventListener("input",()=>{ const q=inp.value.trim(); dd.innerHTML=""; if(!q){dd.classList.remove("show");return;} const r=searchPlayers(q); if(!r.length){dd.innerHTML='<div class="no-results">未找到</div>';dd.classList.add("show");return;} dd.innerHTML=r.map(p=>`<div class="search-item" data-name="${p.name}"><span class="name">${p.name}</span><span class="team">${p.team} · ${(p.points||0).toLocaleString()}分</span></div>`).join("");dd.classList.add("show");});
   dd.addEventListener("click",e=>{ const item=e.target.closest(".search-item"); if(!item) return; const p=PLAYERS.find(pl=>pl.name===item.dataset.name); if(p) dailyGuess(p);});
@@ -849,8 +854,8 @@ function dailyGuess(player) {
   const fb=compareGuess(player,t); document.getElementById("daily-count").textContent=g.length+"/8";
   document.getElementById("daily-body").innerHTML=g.map((p,i)=>{ const f=compareGuess(p,t); return `<tr class="${i===g.length-1?'row-latest':''} ${f.correct?'row-correct':''}"><td class="name-cell ${f.correct?'correct':'wrong'}">${f.nickname}</td>${renderCell(f.attributes.team)}${renderCell(f.attributes.position)}${renderCell(f.attributes.age)}${renderCell(f.attributes.championships)}${renderCell(f.attributes.mvp)}${renderCell(f.attributes.fmvp)}${renderCell(f.attributes.allNba)}${renderCell(f.attributes.status)}</tr>`;}).join("");
   document.getElementById("daily-input").value=""; document.getElementById("daily-dropdown").classList.remove("show");
-  if(fb.correct){ window._dailyDone=true; window._lastDailyGuesses=g; recordGame("daily",true,g.length); setTimeout(()=>dailyRender(),500); return; }
-  if(g.length>=8){ window._dailyDone=true; window._lastDailyGuesses=g; recordGame("daily",false,8); setTimeout(()=>dailyRender(),500); }
+  if(fb.correct){ window._dailyDone=true; window._lastDailyGuesses=g; localStorage.setItem("daily_"+dailyDateStr(),"won"); recordGame("daily",true,g.length); setTimeout(()=>dailyRender(),500); return; }
+  if(g.length>=8){ window._dailyDone=true; window._lastDailyGuesses=g; localStorage.setItem("daily_"+dailyDateStr(),"lost"); recordGame("daily",false,8); setTimeout(()=>dailyRender(),500); }
 }
 
 
@@ -885,9 +890,10 @@ function mpStartPoll(roomId) {
 function mpStopPoll(){if(mpPollTimer){clearInterval(mpPollTimer);mpPollTimer=null;}}
 // ============ MULTIPLAYER ============
 let mpRoom = null, mpPlayerNum = null, mpTarget = null;
+const mpPlayerId = localStorage.getItem("mp_pid") || (() => { const id = crypto.randomUUID(); localStorage.setItem("mp_pid", id); return id; })();
 let mpGuesses = [], mpOppGuesses = 0, mpMyWon = false, mpOppWon = false;
 
-const mpPlayerId = localStorage.getItem("mp_pid") || (() => { const id = crypto.randomUUID(); localStorage.setItem("mp_pid", id); return id; })();
+
 
 function mpInit() { sb = true; }
 
