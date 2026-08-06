@@ -949,25 +949,20 @@ async function mpQuickMatch() {
   const c = document.getElementById("mp-container");
   c.innerHTML = `<div class="mp-waiting"><h3>🎲 正在匹配对手</h3><div class="spinner"></div><p style="color:var(--text2)">寻找在线玩家...</p><button class="btn btn-secondary" style="margin-top:16px" onclick="mpCancelMatch()">取消匹配</button></div>`;
   // look for existing quick-match waiting room
-  const data = await sb_list("rooms?status=eq.waiting&p2_id=is.null&code=like.M*&order=created_at&limit=1&select=*");
-  if (!data || !data.length) {} else {
-    const room = data.length ? data[0] : null;
-  if (room) {;
+  const list = await sb_list("rooms?status=eq.waiting&p2_id=is.null&code=like.M*&order=created_at&limit=1&select=*");
+  if (list && list.length > 0) {
+    const room = list[0];
     if (room.p1_id === mpPlayerId) { alert("不能匹配自己"); mpRender("lobby"); return; }
-    const e2 = !(await sb_patch("rooms",{ p2_id: mpPlayerId, status: "playing" },"id=eq."+room.id));
-    if (e2) { alert("加入失败"); mpRender("lobby"); return; }
+    if (!(await sb_patch("rooms",{ p2_id: mpPlayerId, status: "playing" },"id=eq."+room.id))) { mpRender("lobby"); return; }
     mpRoom = room; mpPlayerNum = 2; mpTarget = room.target_json;
-    mpStartPoll(room.id); mpRender("playing");
-    return;
+    mpStartPoll(room.id); mpRender("playing"); return;
   }
   // no waiting room — create one and wait
   const code = "M" + Array.from({length:5}, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random()*36)]).join("");
-  const target = pickRandomTarget();
-  mpTarget = target;
-  const { data: d, error: e3 } = await sb_post("rooms",{ code, p1_id: mpPlayerId, target_name: target.name, target_json: target, status: "waiting" });
+  const target = pickRandomTarget(); mpTarget = target;
+  const d = await sb_post("rooms",{ code, p1_id: mpPlayerId, target_name: target.name, target_json: target, status: "waiting" });
   if (!d) { alert("创建失败"); mpRender("lobby"); return; }
-  mpRoom = d; mpPlayerNum = 1;
-  mpSubscribe(d.id);
+  mpRoom = d; mpPlayerNum = 1; mpStartPoll(d.id);
 }
 
 function mpCancelMatch() {
