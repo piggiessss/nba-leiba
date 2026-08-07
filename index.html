@@ -748,7 +748,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     tab.classList.add("active");
     const tgt = tab.dataset.tab;
     document.getElementById("tab-game").style.display = tgt === "game" ? "block" : "none";
-    if (tgt === "game" && sb) fetchStats();
+
     document.getElementById("tab-browse").style.display = tgt === "browse" ? "block" : "none";
     document.getElementById("tab-multi").style.display = tgt === "multi" ? "block" : "none";
     if (tgt === "multi") { if (!sb) mpInit(); mpRender("lobby"); }
@@ -805,7 +805,7 @@ async function recordGame(mode,won,guessesUsed) {
   if(mode==="daily"){ const ds=dailyDateStr();
     await sb.from("daily_plays").upsert({player_id:mpPlayerId,play_date:ds,won,guesses_used:guessesUsed,guesses_json:window._lastDailyGuesses||[]});
   }
-  fetchStats();
+
 }
 async function fetchStats() {
   if(!sb){ document.getElementById("daily-stats-bar")&&(document.getElementById("daily-stats-bar").innerHTML=""); return; }
