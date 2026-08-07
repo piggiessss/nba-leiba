@@ -874,7 +874,7 @@ function mpRender(state) {
   if (state === "lobby") mpRenderLobby(c);
   else if (state === "waiting") mpRenderWaiting(c);
   else if (state === "playing") mpRenderBoard(c);
-  else if (state === "finished") { mpRenderBoard(c); mpRenderResult(c); }
+  else if (state === "finished") { mpRenderResult(c); }
 }
 
 function mpRenderLobby(c) {
@@ -968,7 +968,7 @@ function mpSubscribe(roomId) {
         const r = payload.new;
         mpRoom = r;
         if (r.status === "playing" && mpPlayerNum === 1) { mpRender("playing"); return; }
-        if (r.status === "finished") { mpOppWon = mpPlayerNum === 1 ? r.p2_won : r.p1_won; if (!mpMyWon) recordGame("multi",mpOppWon?false:mpPlayerNum===1?r.p1_won:r.p2_won,mpGuesses.length); mpRender("finished"); return; }
+        if (r.status === "finished") { if (!document.getElementById("mp-result-overlay")) { mpOppWon = mpPlayerNum === 1 ? r.p2_won : r.p1_won; mpRenderResult(c); } return; }
         mpOppGuesses = mpPlayerNum === 1 ? r.p2_guesses : r.p1_guesses;
         if (mpPlayerNum === 1 && r.p2_id && mpRoom.p2_id !== r.p2_id) { mpRoom = r; mpRender("playing"); return; }
         mpRender("playing");
@@ -1088,6 +1088,7 @@ async function mpGuess(player) {
 }
 
 function mpRenderResult(c) {
+  if (document.getElementById("mp-result-overlay")) return;
   let cls, title, detail;
   if (mpMyWon) {
     cls = "win"; title = "🎉 你赢了！";
@@ -1100,7 +1101,7 @@ function mpRenderResult(c) {
     detail = `双方都没猜中，答案是 <strong>${mpTarget.name}</strong>（${mpTarget.team} · ${mpTarget.position}）`;
   }
   const el = document.createElement("div");
-  el.className = "mp-result " + cls;
+  el.className = "mp-result " + cls; el.id = "mp-result-overlay";
   el.innerHTML = `<h3>${title}</h3><p>${detail}</p>
     <p style="font-size:.8rem;color:var(--text2)">历史得分榜第 ${mpTarget.rank} 名 · ${mpTarget.points.toLocaleString()} 分</p>
     <button class="btn btn-primary" style="margin-top:12px" onclick="mpLeave()">返回大厅</button>`;
@@ -1114,6 +1115,7 @@ async function mpLeave() {
   if (mpChannel) { sb.removeChannel(mpChannel); mpChannel = null; }
   mpRoom = null; mpPlayerNum = null; mpTarget = null;
   mpGuesses = []; mpOppGuesses = 0; mpMyWon = false; mpOppWon = false;
+  const ov = document.getElementById("mp-result-overlay"); if (ov) ov.remove();
   mpRender("lobby");
 }
 
