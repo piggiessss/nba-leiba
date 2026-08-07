@@ -425,8 +425,8 @@ async function doGuess(p) {
   document.getElementById("ct").textContent = guesses.length + "/8";
   document.getElementById("tb").innerHTML = guesses.map((x, i) => { const f = compare(x, target); return `<tr class="${i === guesses.length - 1 ? "row-latest" : ""} ${f.correct ? "row-correct" : ""}"><td class="name-cell ${f.correct ? "correct" : "wrong"}">${f.name}</td>${cell(f.attrs.team)}${cell(f.attrs.position)}${cell(f.attrs.age)}${cell(f.attrs.championships)}${cell(f.attrs.mvp)}${cell(f.attrs.fmvp)}${cell(f.attrs.allNba)}${f.correct ? '<td class="correct">现役</td>' : '<td class="wrong">-</td>'}</tr>` }).join("");
   document.getElementById("inp").value = ""; document.getElementById("dd").classList.remove("show");
-  if (fb.correct) { roundActive = false; const wcol = "p" + pNum + "_rounds_won"; const cr = (await api("GET", "rooms?id=eq." + room.id + "&select=*"))[0]; const mw = (cr[wcol] || 0) + 1; await api("PATCH", "rooms?id=eq." + room.id, { [wcol]: mw, match_status: mw >= Math.ceil(boTarget / 2) ? "match_end" : "round_end" }); stopPoll(); return }
-  if (guesses.length >= 8 && (oppFB || []).length >= 8) { roundActive = false; await api("PATCH", "rooms?id=eq." + room.id, { match_status: "round_end" }); stopPoll() }
+  if (fb.correct) { roundActive = false; const wcol = "p" + pNum + "_rounds_won"; const cr = (await api("GET", "rooms?id=eq." + room.id + "&select=*"))[0]; const mw = (cr[wcol] || 0) + 1; await api("PATCH", "rooms?id=eq." + room.id, { [wcol]: mw, match_status: mw >= Math.ceil(boTarget / 2) ? "match_end" : "round_end" }); return }
+  if (guesses.length >= 8 && (oppFB || []).length >= 8) { roundActive = false; await api("PATCH", "rooms?id=eq." + room.id, { match_status: "round_end" }); return }
 }
 function startTimer() {
   if (tmr) clearInterval(tmr);
@@ -440,7 +440,7 @@ function startTimer() {
 async function onTimeout() {
   if (!roundActive) return;
   const r = await api("GET", "rooms?id=eq." + room.id + "&select=*");
-  if (r[0] && r[0].match_status === "playing") { roundActive = false; await api("PATCH", "rooms?id=eq." + r[0].id, { match_status: "round_end" }) }
+  if (r[0] && r[0].match_status === "playing") { roundActive = false; await api("PATCH", "rooms?id=eq." + r[0].id, { match_status: "round_end" }); return }
 }
 async function endRound(r) {
   clearInterval(tmr);
