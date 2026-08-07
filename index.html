@@ -915,8 +915,10 @@ async function mpFind(){
   mp("searching");
   const list = await sb("GET","rooms?match_status=eq.matching&p2_id=is.null&order=created_at&limit=1&select=*");
   if(list&&list.length&&list[0].p1_id!==PID){
-    const r=list[0]; await sb("PATCH","rooms?id=eq."+r.id,{p2_id:PID,match_status:"found"});
-    R={...R,id:r.id,pnum:2,myScore:0,oppScore:0}; mpPoll(r.id); mp("found"); return;
+    const r=list[0];
+    const age = Date.now() - new Date(r.created_at).getTime();
+    if(age > 60000){ await sb("DELETE","rooms?id=eq."+r.id); } // expired room, delete and continue
+    else { await sb("PATCH","rooms?id=eq."+r.id,{p2_id:PID,match_status:"found"}); R={...R,id:r.id,pnum:2,myScore:0,oppScore:0}; mpPoll(r.id); mp("found"); return; }
   }
   const d=await sb("POST","rooms",{code:Array.from({length:6},()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random()*36)]).join(""),p1_id:PID,match_status:"matching",p1_rounds_won:0,p2_rounds_won:0,round:1});
   if(!d||!d.length){mp("lobby");return}
@@ -992,6 +994,7 @@ function mpPoll(rid){
     // Detect state transitions
     if(R.status!=="playing"&&R.status!=="found")return; // lobby/searching don't poll state
     if(r.p1_ready&&r.p2_ready&&r.match_status==="found"){await mpStartRound(r);return}
+    if(r.match_status==="found"&&r.p2_id&&!r.p2_ready&&Date.now()-new Date(r.created_at).getTime()>120000){await sb("DELETE","rooms?id=eq."+r.id);mpStop();mp("lobby");alert("对手超时未准备");return}
     if(r.match_status==="round_over"){mpEndRound(r);return}
     if(r.match_status==="finished"){mpMatchResult(document.getElementById("mp-container"));return}
     // Update opponent feedback
