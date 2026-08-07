@@ -1,0 +1,443 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>NBA 勒一把 · 竞技对战</title><style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0e17;--bg2:#111827;--bg3:#1a2332;--bg4:#243044;--text:#e2e8f0;--text2:#94a3b8;--c-bg:#14532d;--c-tx:#4ade80;--c-bd:#22c55e;--cl-bg:#713f12;--cl-tx:#facc15;--cl-bd:#eab308;--w-bg:#1e293b;--w-tx:#64748b;--border:#334155;--accent:#f97316;--accent2:#ef4444;--radius:8px;--radius-lg:12px}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.app{max-width:700px;margin:0 auto;padding:16px}
+header{text-align:center;padding:24px 0 16px}
+header h1{font-size:1.8rem;font-weight:800;background:linear-gradient(135deg,#f97316,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.game-table-wrap{overflow-x:auto;margin-bottom:12px;border-radius:var(--radius-lg);border:1px solid var(--border)}
+.game-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.game-table thead{background:var(--bg3)}
+.game-table th{text-align:center;padding:8px 6px;color:var(--text2);font-weight:700;font-size:.7rem;border-bottom:2px solid var(--border);white-space:nowrap}
+.game-table th:first-child{text-align:left;padding-left:12px}
+.game-table td{text-align:center;padding:7px 6px;border-bottom:1px solid var(--bg3);white-space:nowrap;font-weight:600;font-size:.78rem}
+.game-table td:first-child{text-align:left;padding-left:12px;font-weight:700;color:var(--text)}
+.game-table td.correct{background:var(--c-bg)!important;color:var(--c-tx)!important;border-left:2px solid var(--c-bd);border-right:2px solid var(--c-bd)}
+.game-table td.close{background:var(--cl-bg)!important;color:var(--cl-tx)!important;border-left:2px solid var(--cl-bd);border-right:2px solid var(--cl-bd)}
+.game-table td.wrong{background:var(--w-bg);color:var(--w-tx)}
+.game-table .row-latest td{border-bottom:2px solid var(--accent)}
+.game-table .row-correct td{background:rgba(34,197,94,.18)!important}
+.row-correct .name-cell{color:var(--c-tx)!important}
+.search-wrap{position:relative;margin-bottom:12px}
+.search-input{width:100%;padding:10px 14px;background:var(--bg2);border:2px solid var(--border);border-radius:var(--radius-lg);color:var(--text);font-size:.9rem;outline:none}
+.search-input:focus{border-color:var(--accent)}
+.search-dropdown{position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);max-height:200px;overflow-y:auto;z-index:100;display:none;margin-top:4px}
+.search-dropdown.show{display:block}
+.search-item{padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background .15s;border-bottom:1px solid var(--bg3)}
+.search-item:hover{background:var(--bg3)}
+.search-item .name{font-weight:600;font-size:.85rem}
+.search-item .team{color:var(--text2);font-size:.7rem}
+.no-results{padding:14px;text-align:center;color:var(--text2)}
+.btn{padding:10px 24px;border:none;border-radius:var(--radius);font-size:.9rem;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#ea580c}
+.btn-secondary{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--bg4)}
+/* Timer */
+.timer{text-align:center;padding:8px;font-size:1.4rem;font-weight:800;border-radius:var(--radius);margin-bottom:10px;transition:all .3s}
+.timer.safe{color:#4ade80;background:rgba(34,197,94,.08)}
+.timer.warn{color:#facc15;background:rgba(250,204,21,.08)}
+.timer.danger{color:#f87171;background:rgba(239,68,68,.08);animation:pulse .3s infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:.6}}
+/* Score */
+.score{display:flex;justify-content:center;gap:30px;margin-bottom:12px}
+.score .s{text-align:center}
+.score .s .n{font-weight:700;font-size:.8rem}
+.score .s .p{font-size:2rem;font-weight:800;line-height:1}
+.score .s .p.me{color:var(--accent)}
+.score .s .p.opp{color:var(--text2)}
+.score .vs{font-size:1.2rem;color:var(--text2);padding-top:14px}
+/* Opponent bar */
+.opp-bar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;font-size:.8rem;color:var(--text2)}
+.opp-bar .dots{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px;min-height:18px}
+.opp-bar .dots span{width:14px;height:14px;border-radius:3px;display:inline-block}
+.opp-bar strong{color:var(--accent)}
+/* Lobby */
+.lobby{text-align:center;padding:50px 20px}
+.lobby h3{margin-bottom:8px}
+.lobby p{color:var(--text2);font-size:.85rem;margin-bottom:20px}
+.spinner{width:44px;height:44px;border:4px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:20px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.searching{text-align:center;padding:50px 20px}
+.ready-box{text-align:center;padding:30px 20px}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px 28px;max-width:380px;width:90%;text-align:center}
+.modal.win{border-color:rgba(34,197,94,.3)}
+.modal.lose{border-color:rgba(239,68,68,.3)}
+.modal.draw{border-color:rgba(250,204,21,.3)}
+.modal h3{font-size:1.1rem;margin-bottom:10px}
+.modal .pname{font-size:1.3rem;font-weight:800;margin:8px 0}
+.modal .grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin:10px 0;font-size:.8rem;text-align:left}
+.modal .grid .k{color:var(--text2)}.modal .grid .v{text-align:right;font-weight:600}
+.match-result{text-align:center;padding:40px 20px}
+.match-result h2{font-size:1.5rem;margin-bottom:10px}
+.match-result .fs{font-size:2rem;font-weight:800;margin:14px 0}
+.match-result .fs .w{color:var(--accent)}
+</style></head><body><div class="app"><header><h1>🏀 NBA 勒一把</h1><p>竞技对战 · BO3 赛制 · 60秒限时</p></header><div id="view"></div></div><script>
+const SUPABASE_URL = "https://bufvapllekiobkirndyj.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZnZhcGxsZWtpb2JraXJuZHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDI3OTIsImV4cCI6MjEwMTYxODc5Mn0.40q4bwEZZIkazJ-v-wJpwN3NbkeILCGwuns3ii9fxPE";
+const SB = SUPABASE_URL+"/rest/v1";
+const H = (m)=>({method:m,headers:{"apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Content-Type":"application/json","Prefer":"return=representation"},body:undefined});
+async function api(m,path,d){const o=H(m);if(d)o.body=JSON.stringify(d);const r=await fetch(SB+"/"+path,o);if(!r.ok)throw new Error(r.status);return r.json()}
+const pid = localStorage.getItem("c_pid")||(()=>{const id=crypto.randomUUID();localStorage.setItem("c_pid",id);return id})();
+
+const PLAYERS = [
+  {name:"勒布朗·詹姆斯",nameEn:"LeBron James",team:"76人",number:23,position:"小前锋",age:41,championships:4,mvp:4,fmvp:4,allNba:21,isActive:true,difficulty:"easy",points:43440,rank:1},
+  {name:"卡里姆·阿卜杜尔-贾巴尔",nameEn:"Kareem Abdul-Jabbar",team:"湖人",number:33,position:"中锋",age:79,championships:6,mvp:6,fmvp:2,allNba:15,isActive:false,difficulty:"easy",points:38387,rank:2},
+  {name:"卡尔·马龙",nameEn:"Karl Malone",team:"湖人",number:11,position:"大前锋",age:63,championships:0,mvp:2,fmvp:0,allNba:14,isActive:false,difficulty:"easy",points:36928,rank:3},
+  {name:"科比·布莱恩特",nameEn:"Kobe Bryant",team:"湖人",number:24,position:"得分后卫",age:47,championships:5,mvp:1,fmvp:2,allNba:15,isActive:false,difficulty:"easy",points:33643,rank:4},
+  {name:"凯文·杜兰特",nameEn:"Kevin Durant",team:"火箭",number:7,position:"小前锋",age:37,championships:2,mvp:1,fmvp:2,allNba:12,isActive:true,difficulty:"easy",points:32597,rank:5},
+  {name:"迈克尔·乔丹",nameEn:"Michael Jordan",team:"奇才",number:23,position:"得分后卫",age:63,championships:6,mvp:5,fmvp:6,allNba:11,isActive:false,difficulty:"easy",points:32292,rank:6},
+  {name:"德克·诺维茨基",nameEn:"Dirk Nowitzki",team:"独行侠",number:41,position:"大前锋",age:48,championships:1,mvp:1,fmvp:1,allNba:12,isActive:false,difficulty:"easy",points:31560,rank:7},
+  {name:"威尔特·张伯伦",nameEn:"Wilt Chamberlain",team:"湖人",number:13,position:"中锋",age:89,championships:2,mvp:4,fmvp:1,allNba:10,isActive:false,difficulty:"easy",points:31419,rank:8},
+  {name:"詹姆斯·哈登",nameEn:"James Harden",team:"骑士",number:1,position:"得分后卫",age:36,championships:0,mvp:1,fmvp:0,allNba:8,isActive:true,difficulty:"easy",points:29339,rank:9},
+  {name:"沙奎尔·奥尼尔",nameEn:"Shaquille O'Neal",team:"凯尔特人",number:36,position:"中锋",age:54,championships:4,mvp:1,fmvp:3,allNba:14,isActive:false,difficulty:"easy",points:28596,rank:10},
+  {name:"卡梅隆·安东尼",nameEn:"Carmelo Anthony",team:"尼克斯",number:7,position:"小前锋",age:42,championships:0,mvp:0,fmvp:0,allNba:6,isActive:false,difficulty:"easy",points:28289,rank:11},
+  {name:"摩西·马龙",nameEn:"Moses Malone",team:"马刺",number:2,position:"中锋",age:71,championships:1,mvp:3,fmvp:1,allNba:8,isActive:false,difficulty:"easy",points:27409,rank:12},
+  {name:"埃尔文·海耶斯",nameEn:"Elvin Hayes",team:"奇才",number:11,position:"大前锋",age:80,championships:1,mvp:0,fmvp:0,allNba:6,isActive:false,difficulty:"hard",points:27313,rank:13},
+  {name:"拉塞尔·威斯布鲁克",nameEn:"Russell Westbrook",team:"国王",number:18,position:"控球后卫",age:37,championships:0,mvp:1,fmvp:0,allNba:9,isActive:true,difficulty:"easy",points:27176,rank:14},
+  {name:"哈基姆·奥拉朱旺",nameEn:"Hakeem Olajuwon",team:"猛龙",number:34,position:"中锋",age:63,championships:2,mvp:1,fmvp:2,allNba:12,isActive:false,difficulty:"easy",points:26946,rank:15},
+  {name:"德马尔·德罗赞",nameEn:"DeMar DeRozan",team:"国王",number:10,position:"得分后卫",age:37,championships:0,mvp:0,fmvp:0,allNba:3,isActive:true,difficulty:"easy",points:26711,rank:16},
+  {name:"奥斯卡·罗伯特森",nameEn:"Oscar Robertson",team:"雄鹿",number:1,position:"控球后卫",age:87,championships:1,mvp:1,fmvp:0,allNba:11,isActive:false,difficulty:"easy",points:26710,rank:17},
+  {name:"多米尼克·威尔金斯",nameEn:"Dominique Wilkins",team:"老鹰",number:21,position:"小前锋",age:66,championships:0,mvp:0,fmvp:0,allNba:7,isActive:false,difficulty:"easy",points:26668,rank:18},
+  {name:"斯蒂芬·库里",nameEn:"Stephen Curry",team:"勇士",number:30,position:"控球后卫",age:38,championships:4,mvp:2,fmvp:1,allNba:11,isActive:true,difficulty:"easy",points:26528,rank:19},
+  {name:"蒂姆·邓肯",nameEn:"Tim Duncan",team:"马刺",number:21,position:"大前锋",age:50,championships:5,mvp:2,fmvp:3,allNba:15,isActive:false,difficulty:"easy",points:26496,rank:20},
+  {name:"保罗·皮尔斯",nameEn:"Paul Pierce",team:"凯尔特人",number:34,position:"小前锋",age:48,championships:1,mvp:0,fmvp:1,allNba:4,isActive:false,difficulty:"easy",points:26397,rank:21},
+  {name:"约翰·哈夫利切克",nameEn:"John Havlicek",team:"凯尔特人",number:17,position:"小前锋",age:86,championships:8,mvp:0,fmvp:1,allNba:11,isActive:false,difficulty:"easy",points:26395,rank:22},
+  {name:"凯文·加内特",nameEn:"Kevin Garnett",team:"森林狼",number:21,position:"大前锋",age:50,championships:1,mvp:1,fmvp:0,allNba:9,isActive:false,difficulty:"easy",points:26071,rank:23},
+  {name:"文斯·卡特",nameEn:"Vince Carter",team:"老鹰",number:15,position:"得分后卫",age:49,championships:0,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"easy",points:25728,rank:24},
+  {name:"亚历克斯·英格利什",nameEn:"Alex English",team:"掘金",number:2,position:"小前锋",age:72,championships:0,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:25613,rank:25},
+  {name:"雷吉·米勒",nameEn:"Reggie Miller",team:"步行者",number:31,position:"得分后卫",age:60,championships:0,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"easy",points:25279,rank:26},
+  {name:"杰里·韦斯特",nameEn:"Jerry West",team:"湖人",number:44,position:"得分后卫",age:88,championships:1,mvp:1,fmvp:1,allNba:12,isActive:false,difficulty:"easy",points:25192,rank:27},
+  {name:"帕特里克·尤因",nameEn:"Patrick Ewing",team:"魔术",number:6,position:"中锋",age:64,championships:0,mvp:0,fmvp:0,allNba:7,isActive:false,difficulty:"easy",points:24815,rank:28},
+  {name:"雷·阿伦",nameEn:"Ray Allen",team:"热火",number:34,position:"得分后卫",age:51,championships:2,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"easy",points:24505,rank:29},
+  {name:"阿伦·艾弗森",nameEn:"Allen Iverson",team:"76人",number:3,position:"得分后卫",age:51,championships:0,mvp:1,fmvp:0,allNba:7,isActive:false,difficulty:"easy",points:24368,rank:30},
+  {name:"查尔斯·巴克利",nameEn:"Charles Barkley",team:"火箭",number:34,position:"大前锋",age:63,championships:0,mvp:1,fmvp:0,allNba:11,isActive:false,difficulty:"easy",points:23757,rank:31},
+  {name:"罗伯特·帕里什",nameEn:"Robert Parish",team:"凯尔特人",number:0,position:"中锋",age:72,championships:4,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"hard",points:23334,rank:32},
+  {name:"阿德里安·丹特利",nameEn:"Adrian Dantley",team:"爵士",number:4,position:"小前锋",age:70,championships:0,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"hard",points:23177,rank:33},
+  {name:"德维恩·韦德",nameEn:"Dwyane Wade",team:"热火",number:3,position:"得分后卫",age:44,championships:3,mvp:0,fmvp:1,allNba:8,isActive:false,difficulty:"easy",points:23165,rank:34},
+  {name:"埃尔金·贝勒",nameEn:"Elgin Baylor",team:"湖人",number:22,position:"小前锋",age:91,championships:0,mvp:0,fmvp:0,allNba:10,isActive:false,difficulty:"easy",points:23149,rank:35},
+  {name:"克里斯·保罗",nameEn:"Chris Paul",team:"马刺",number:3,position:"控球后卫",age:41,championships:0,mvp:0,fmvp:0,allNba:11,isActive:false,difficulty:"easy",points:23058,rank:36},
+  {name:"达米安·利拉德",nameEn:"Damian Lillard",team:"开拓者",number:0,position:"控球后卫",age:36,championships:0,mvp:0,fmvp:0,allNba:7,isActive:true,difficulty:"easy",points:22598,rank:37},
+  {name:"克莱德·德雷克斯勒",nameEn:"Clyde Drexler",team:"开拓者",number:22,position:"得分后卫",age:64,championships:1,mvp:0,fmvp:0,allNba:5,isActive:false,difficulty:"easy",points:22195,rank:38},
+  {name:"加里·佩顿",nameEn:"Gary Payton",team:"热火",number:20,position:"控球后卫",age:58,championships:1,mvp:1,fmvp:0,allNba:9,isActive:false,difficulty:"easy",points:21813,rank:39},
+  {name:"拉里·伯德",nameEn:"Larry Bird",team:"凯尔特人",number:33,position:"小前锋",age:69,championships:3,mvp:3,fmvp:2,allNba:10,isActive:false,difficulty:"easy",points:21791,rank:40},
+  {name:"哈尔·格里尔",nameEn:"Hal Greer",team:"76人",number:15,position:"得分后卫",age:90,championships:1,mvp:0,fmvp:0,allNba:7,isActive:false,difficulty:"hard",points:21586,rank:41},
+  {name:"扬尼斯·阿德托昆博",nameEn:"Giannis Antetokounmpo",team:"热火",number:7,position:"大前锋",age:31,championships:1,mvp:2,fmvp:1,allNba:8,isActive:true,difficulty:"easy",points:21531,rank:42},
+  {name:"沃尔特·贝拉米",nameEn:"Walt Bellamy",team:"老鹰",number:8,position:"中锋",age:87,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:20941,rank:43},
+  {name:"保罗·加索尔",nameEn:"Pau Gasol",team:"湖人",number:16,position:"大前锋",age:46,championships:2,mvp:0,fmvp:0,allNba:4,isActive:false,difficulty:"easy",points:20894,rank:44},
+  {name:"鲍勃·佩蒂特",nameEn:"Bob Pettit",team:"老鹰",number:9,position:"大前锋",age:93,championships:1,mvp:2,fmvp:0,allNba:11,isActive:false,difficulty:"hard",points:20880,rank:45},
+  {name:"大卫·罗宾逊",nameEn:"David Robinson",team:"马刺",number:50,position:"中锋",age:61,championships:2,mvp:1,fmvp:0,allNba:10,isActive:false,difficulty:"easy",points:20790,rank:46},
+  {name:"乔治·格文",nameEn:"George Gervin",team:"公牛",number:44,position:"得分后卫",age:74,championships:0,mvp:0,fmvp:0,allNba:9,isActive:false,difficulty:"easy",points:20708,rank:47},
+  {name:"拉马库斯·阿尔德里奇",nameEn:"LaMarcus Aldridge",team:"开拓者",number:12,position:"大前锋",age:41,championships:0,mvp:0,fmvp:0,allNba:5,isActive:false,difficulty:"easy",points:20558,rank:48},
+  {name:"米奇·里奇蒙德",nameEn:"Mitch Richmond",team:"湖人",number:2,position:"得分后卫",age:61,championships:1,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:20497,rank:49},
+  {name:"乔·约翰逊",nameEn:"Joe Johnson",team:"凯尔特人",number:55,position:"得分后卫",age:45,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:20407,rank:50},
+  {name:"汤姆·钱伯斯",nameEn:"Tom Chambers",team:"76人",number:24,position:"大前锋",age:67,championships:0,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"hard",points:20049,rank:51},
+  {name:"安托万·贾米森",nameEn:"Antawn Jamison",team:"快船",number:33,position:"大前锋",age:50,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:20042,rank:52},
+  {name:"约翰·斯托克顿",nameEn:"John Stockton",team:"爵士",number:12,position:"控球后卫",age:64,championships:0,mvp:0,fmvp:0,allNba:11,isActive:false,difficulty:"easy",points:19711,rank:53},
+  {name:"伯纳德·金",nameEn:"Bernard King",team:"篮网",number:30,position:"小前锋",age:69,championships:0,mvp:0,fmvp:0,allNba:4,isActive:false,difficulty:"hard",points:19655,rank:54},
+  {name:"克利福德·罗宾逊",nameEn:"Clifford Robinson",team:"开拓者",number:3,position:"大前锋",age:59,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:19591,rank:55},
+  {name:"沃尔特·戴维斯",nameEn:"Walter Davis",team:"太阳",number:6,position:"得分后卫",age:71,championships:0,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"hard",points:19521,rank:56},
+  {name:"德怀特·霍华德",nameEn:"Dwight Howard",team:"魔术",number:12,position:"中锋",age:40,championships:1,mvp:0,fmvp:0,allNba:8,isActive:false,difficulty:"easy",points:19485,rank:57},
+  {name:"托尼·帕克",nameEn:"Tony Parker",team:"马刺",number:9,position:"控球后卫",age:44,championships:4,mvp:0,fmvp:1,allNba:4,isActive:false,difficulty:"easy",points:19473,rank:58},
+  {name:"特里·卡明斯",nameEn:"Terry Cummings",team:"雄鹿",number:34,position:"大前锋",age:65,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:19460,rank:59},
+  {name:"贾马尔·克劳福德",nameEn:"Jamal Crawford",team:"快船",number:11,position:"得分后卫",age:46,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:19419,rank:60},
+  {name:"安东尼·戴维斯",nameEn:"Anthony Davis",team:"奇才",number:23,position:"大前锋",age:33,championships:1,mvp:0,fmvp:0,allNba:5,isActive:true,difficulty:"easy",points:19385,rank:61},
+  {name:"保罗·乔治",nameEn:"Paul George",team:"凯尔特人",number:13,position:"小前锋",age:36,championships:0,mvp:0,fmvp:0,allNba:6,isActive:true,difficulty:"easy",points:19338,rank:62},
+  {name:"鲍勃·兰尼尔",nameEn:"Bob Lanier",team:"雄鹿",number:16,position:"中锋",age:77,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:19248,rank:63},
+  {name:"埃迪·约翰逊",nameEn:"Eddie Johnson",team:"火箭",number:8,position:"小前锋",age:67,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:19202,rank:64},
+  {name:"盖尔·古德里奇",nameEn:"Gail Goodrich",team:"爵士",number:14,position:"得分后卫",age:83,championships:1,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:19181,rank:65},
+  {name:"雷吉·托伊斯",nameEn:"Reggie Theus",team:"篮网",number:24,position:"得分后卫",age:68,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:19015,rank:66},
+  {name:"戴尔·埃利斯",nameEn:"Dale Ellis",team:"超音速",number:3,position:"得分后卫",age:66,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:19004,rank:67},
+  {name:"斯科蒂·皮蓬",nameEn:"Scottie Pippen",team:"公牛",number:33,position:"小前锋",age:60,championships:6,mvp:0,fmvp:0,allNba:7,isActive:false,difficulty:"easy",points:18940,rank:68},
+  {name:"杰森·特里",nameEn:"Jason Terry",team:"独行侠",number:31,position:"得分后卫",age:48,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:18881,rank:69},
+  {name:"切特·沃克",nameEn:"Chet Walker",team:"公牛",number:25,position:"小前锋",age:86,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:18831,rank:70},
+  {name:"伊塞亚·托马斯",nameEn:"Isiah Thomas",team:"活塞",number:11,position:"控球后卫",age:65,championships:2,mvp:0,fmvp:1,allNba:5,isActive:false,difficulty:"easy",points:18822,rank:71},
+  {name:"鲍勃·麦卡杜",nameEn:"Bob McAdoo",team:"76人",number:11,position:"中锋",age:74,championships:2,mvp:1,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:18787,rank:72},
+  {name:"扎克·兰多夫",nameEn:"Zach Randolph",team:"灰熊",number:50,position:"大前锋",age:45,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:18578,rank:73},
+  {name:"马克·阿吉雷",nameEn:"Mark Aguirre",team:"快船",number:1,position:"小前锋",age:66,championships:2,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:18458,rank:74},
+  {name:"多尔夫·谢伊斯",nameEn:"Dolph Schayes",team:"76人",number:4,position:"大前锋",age:98,championships:1,mvp:0,fmvp:0,allNba:12,isActive:false,difficulty:"hard",points:18438,rank:75},
+  {name:"凯里·欧文",nameEn:"Kyrie Irving",team:"独行侠",number:11,position:"控球后卫",age:34,championships:1,mvp:0,fmvp:0,allNba:3,isActive:true,difficulty:"easy",points:18433,rank:76},
+  {name:"里克·巴里",nameEn:"Rick Barry",team:"火箭",number:4,position:"小前锋",age:82,championships:1,mvp:1,fmvp:1,allNba:5,isActive:false,difficulty:"easy",points:18395,rank:77},
+  {name:"特雷西·麦克格雷迪",nameEn:"Tracy McGrady",team:"火箭",number:1,position:"得分后卫",age:47,championships:0,mvp:0,fmvp:0,allNba:7,isActive:false,difficulty:"easy",points:18381,rank:78},
+  {name:"朱利叶斯·欧文",nameEn:"Julius Erving",team:"76人",number:6,position:"小前锋",age:76,championships:1,mvp:1,fmvp:0,allNba:5,isActive:false,difficulty:"easy",points:18364,rank:79},
+  {name:"格伦·莱斯",nameEn:"Glen Rice",team:"黄蜂",number:41,position:"小前锋",age:59,championships:1,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:18336,rank:80},
+  {name:"戴夫·宾",nameEn:"Dave Bing",team:"活塞",number:21,position:"控球后卫",age:82,championships:0,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:18327,rank:81},
+  {name:"布鲁克·洛佩斯",nameEn:"Brook Lopez",team:"快船",number:11,position:"中锋",age:38,championships:1,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"easy",points:18151,rank:82},
+  {name:"德文·布克",nameEn:"Devin Booker",team:"太阳",number:15,position:"得分后卫",age:29,championships:0,mvp:0,fmvp:0,allNba:2,isActive:true,difficulty:"easy",points:18120,rank:83},
+  {name:"尼古拉·约基奇",nameEn:"Nikola Jokić",team:"掘金",number:15,position:"中锋",age:31,championships:1,mvp:3,fmvp:1,allNba:7,isActive:true,difficulty:"easy",points:18009,rank:84},
+  {name:"沃尔德·B·弗里",nameEn:"World B. Free",team:"火箭",number:21,position:"得分后卫",age:72,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:17955,rank:85},
+  {name:"卡尔文·墨菲",nameEn:"Calvin Murphy",team:"火箭",number:23,position:"控球后卫",age:78,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:17949,rank:86},
+  {name:"卢·哈德森",nameEn:"Lou Hudson",team:"老鹰",number:23,position:"得分后卫",age:82,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:17940,rank:87},
+  {name:"克里斯·穆林",nameEn:"Chris Mullin",team:"勇士",number:17,position:"小前锋",age:63,championships:0,mvp:0,fmvp:0,allNba:4,isActive:false,difficulty:"hard",points:17911,rank:88},
+  {name:"兰尼·威尔肯斯",nameEn:"Lenny Wilkens",team:"骑士",number:19,position:"控球后卫",age:88,championships:1,mvp:0,fmvp:0,allNba:6,isActive:false,difficulty:"hard",points:17772,rank:89},
+  {name:"贝利·霍威尔",nameEn:"Bailey Howell",team:"公牛",number:18,position:"大前锋",age:89,championships:2,mvp:0,fmvp:0,allNba:6,isActive:false,difficulty:"hard",points:17770,rank:90},
+  {name:"魔术师约翰逊",nameEn:"Magic Johnson",team:"湖人",number:32,position:"控球后卫",age:66,championships:5,mvp:3,fmvp:3,allNba:10,isActive:false,difficulty:"easy",points:17707,rank:91},
+  {name:"肖恩·马里昂",nameEn:"Shawn Marion",team:"太阳",number:31,position:"小前锋",age:48,championships:1,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"hard",points:17700,rank:92},
+  {name:"尼古拉·武切维奇",nameEn:"Nikola Vučević",team:"魔术",number:9,position:"中锋",age:35,championships:0,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:17684,rank:93},
+  {name:"鲁迪·盖伊",nameEn:"Rudy Gay",team:"国王",number:22,position:"小前锋",age:39,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:17642,rank:94},
+  {name:"罗兰多·布莱克曼",nameEn:"Rolando Blackman",team:"独行侠",number:22,position:"得分后卫",age:67,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:17623,rank:95},
+  {name:"奥蒂斯·索普",nameEn:"Otis Thorpe",team:"活塞",number:52,position:"大前锋",age:64,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:17600,rank:96},
+  {name:"贾森·基德",nameEn:"Jason Kidd",team:"独行侠",number:5,position:"控球后卫",age:53,championships:1,mvp:0,fmvp:0,allNba:6,isActive:false,difficulty:"easy",points:17529,rank:97},
+  {name:"厄尔·门罗",nameEn:"Earl Monroe",team:"尼克斯",number:15,position:"得分后卫",age:81,championships:1,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:17454,rank:98},
+  {name:"史蒂夫·纳什",nameEn:"Steve Nash",team:"湖人",number:10,position:"控球后卫",age:52,championships:0,mvp:2,fmvp:0,allNba:7,isActive:false,difficulty:"easy",points:17387,rank:99},
+  {name:"克莱·汤普森",nameEn:"Klay Thompson",team:"独行侠",number:31,position:"得分后卫",age:36,championships:4,mvp:0,fmvp:0,allNba:2,isActive:true,difficulty:"easy",points:17346,rank:100},
+  {name:"凯文·麦克海尔",nameEn:"Kevin McHale",team:"凯尔特人",number:32,position:"大前锋",age:68,championships:3,mvp:0,fmvp:0,allNba:7,isActive:false,difficulty:"easy",points:17335,rank:101},
+  {name:"布拉德利·比尔",nameEn:"Bradley Beal",team:"快船",number:0,position:"得分后卫",age:33,championships:0,mvp:0,fmvp:0,allNba:1,isActive:true,difficulty:"hard",points:17306,rank:102},
+  {name:"朱·霍勒迪",nameEn:"Jrue Holiday",team:"开拓者",number:5,position:"控球后卫",age:36,championships:2,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:17287,rank:104},
+  {name:"凯文·威利斯",nameEn:"Kevin Willis",team:"老鹰",number:42,position:"中锋",age:63,championships:1,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:17253,rank:106},
+  {name:"杰夫·马龙",nameEn:"Jeff Malone",team:"奇才",number:24,position:"得分后卫",age:65,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:17231,rank:107},
+  {name:"克里斯·波什",nameEn:"Chris Bosh",team:"热火",number:1,position:"大前锋",age:42,championships:2,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"easy",points:17189,rank:108},
+  {name:"克里斯·韦伯",nameEn:"Chris Webber",team:"国王",number:4,position:"大前锋",age:53,championships:0,mvp:0,fmvp:0,allNba:5,isActive:false,difficulty:"easy",points:17182,rank:109},
+  {name:"格兰特·希尔",nameEn:"Grant Hill",team:"活塞",number:33,position:"小前锋",age:53,championships:0,mvp:0,fmvp:0,allNba:5,isActive:false,difficulty:"easy",points:17137,rank:110},
+  {name:"鲍勃·库西",nameEn:"Bob Cousy",team:"凯尔特人",number:14,position:"控球后卫",age:97,championships:6,mvp:1,fmvp:0,allNba:12,isActive:false,difficulty:"easy",points:16960,rank:111},
+  {name:"CJ·麦科勒姆",nameEn:"CJ McCollum",team:"老鹰",number:3,position:"得分后卫",age:34,championships:0,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:16838,rank:112},
+  {name:"埃尔顿·布兰德",nameEn:"Elton Brand",team:"快船",number:42,position:"大前锋",age:47,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:16827,rank:113},
+  {name:"巴克·威廉姆斯",nameEn:"Buck Williams",team:"篮网",number:52,position:"大前锋",age:66,championships:0,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:16784,rank:114},
+  {name:"迈克·康利",nameEn:"Mike Conley",team:"凯尔特人",number:44,position:"控球后卫",age:38,championships:0,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:16715,rank:115},
+  {name:"拉特里尔·斯普雷维尔",nameEn:"Latrell Sprewell",team:"尼克斯",number:8,position:"得分后卫",age:55,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:16712,rank:116},
+  {name:"吉米·巴特勒",nameEn:"Jimmy Butler",team:"勇士",number:10,position:"小前锋",age:36,championships:0,mvp:0,fmvp:0,allNba:6,isActive:true,difficulty:"easy",points:16658,rank:117},
+  {name:"科怀·伦纳德",nameEn:"Kawhi Leonard",team:"快船",number:2,position:"小前锋",age:35,championships:2,mvp:0,fmvp:2,allNba:6,isActive:true,difficulty:"easy",points:16546,rank:118},
+  {name:"内特·阿奇博尔德",nameEn:"Tiny Archibald",team:"国王",number:1,position:"控球后卫",age:77,championships:1,mvp:0,fmvp:0,allNba:5,isActive:false,difficulty:"hard",points:16481,rank:119},
+  {name:"托拜厄斯·哈里斯",nameEn:"Tobias Harris",team:"马刺",number:23,position:"大前锋",age:34,championships:0,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:16440,rank:120},
+  {name:"杰里·斯塔克豪斯",nameEn:"Jerry Stackhouse",team:"活塞",number:42,position:"得分后卫",age:51,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:16409,rank:121},
+  {name:"乔·杜马斯",nameEn:"Joe Dumars",team:"活塞",number:4,position:"得分后卫",age:63,championships:2,mvp:0,fmvp:1,allNba:3,isActive:false,difficulty:"hard",points:16401,rank:122},
+  {name:"卡尔-安东尼·唐斯",nameEn:"Karl-Anthony Towns",team:"尼克斯",number:32,position:"中锋",age:30,championships:1,mvp:0,fmvp:0,allNba:2,isActive:true,difficulty:"easy",points:16384,rank:123},
+  {name:"凯尔·洛瑞",nameEn:"Kyle Lowry",team:"76人",number:7,position:"控球后卫",age:40,championships:1,mvp:0,fmvp:0,allNba:1,isActive:true,difficulty:"hard",points:16373,rank:124},
+  {name:"詹姆斯·沃西",nameEn:"James Worthy",team:"湖人",number:42,position:"小前锋",age:65,championships:3,mvp:0,fmvp:1,allNba:2,isActive:false,difficulty:"easy",points:16320,rank:125},
+  {name:"斯蒂芬·马布里",nameEn:"Stephon Marbury",team:"尼克斯",number:3,position:"控球后卫",age:49,championships:0,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"hard",points:16297,rank:126},
+  {name:"安德烈·米勒",nameEn:"Andre Miller",team:"掘金",number:24,position:"控球后卫",age:50,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:16278,rank:127},
+  {name:"保罗·阿里金",nameEn:"Paul Arizin",team:"勇士",number:11,position:"小前锋",age:98,championships:1,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:16266,rank:128},
+  {name:"兰迪·史密斯",nameEn:"Randy Smith",team:"快船",number:9,position:"得分后卫",age:77,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:16262,rank:129},
+  {name:"朱万·霍华德",nameEn:"Juwan Howard",team:"热火",number:5,position:"大前锋",age:53,championships:2,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:16159,rank:130},
+  {name:"德里克·哈珀",nameEn:"Derek Harper",team:"尼克斯",number:12,position:"控球后卫",age:64,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:16006,rank:131},
+  {name:"阿玛雷·斯塔德迈尔",nameEn:"Amar'e Stoudemire",team:"太阳",number:32,position:"大前锋",age:43,championships:0,mvp:0,fmvp:0,allNba:5,isActive:false,difficulty:"hard",points:15994,rank:133},
+  {name:"基基·范德维奇",nameEn:"Kiki Vandeweghe",team:"尼克斯",number:55,position:"小前锋",age:68,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15980,rank:134},
+  {name:"皮特·马拉维奇",nameEn:"Pete Maravich",team:"爵士",number:7,position:"得分后卫",age:79,championships:0,mvp:0,fmvp:0,allNba:4,isActive:false,difficulty:"hard",points:15948,rank:135},
+  {name:"杰克·特怀曼",nameEn:"Jack Twyman",team:"国王",number:27,position:"小前锋",age:92,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:15840,rank:136},
+  {name:"昌西·比卢普斯",nameEn:"Chauncey Billups",team:"活塞",number:1,position:"控球后卫",age:49,championships:1,mvp:0,fmvp:1,allNba:3,isActive:false,difficulty:"easy",points:15802,rank:137},
+  {name:"德特雷夫·施拉姆夫",nameEn:"Detlef Schrempf",team:"开拓者",number:11,position:"大前锋",age:63,championships:0,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:15761,rank:138},
+  {name:"理查德·汉密尔顿",nameEn:"Richard Hamilton",team:"公牛",number:32,position:"得分后卫",age:48,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15708,rank:139},
+  {name:"拉里·南斯",nameEn:"Larry Nance",team:"76人",number:22,position:"大前锋",age:67,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:15687,rank:140},
+  {name:"凯文·乐福",nameEn:"Kevin Love",team:"爵士",number:42,position:"大前锋",age:37,championships:1,mvp:0,fmvp:0,allNba:2,isActive:true,difficulty:"hard",points:15669,rank:141},
+  {name:"杰夫·霍纳塞克",nameEn:"Jeff Hornacek",team:"爵士",number:14,position:"得分后卫",age:63,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:15659,rank:142},
+  {name:"安托万·沃克",nameEn:"Antoine Walker",team:"热火",number:8,position:"大前锋",age:49,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15647,rank:143},
+  {name:"萨姆·卡塞尔",nameEn:"Sam Cassell",team:"快船",number:19,position:"控球后卫",age:56,championships:3,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15635,rank:144},
+  {name:"路易斯·威廉姆斯",nameEn:"Lou Williams",team:"老鹰",number:6,position:"得分后卫",age:39,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15593,rank:145},
+  {name:"特里·波特",nameEn:"Terry Porter",team:"马刺",number:30,position:"控球后卫",age:63,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15586,rank:146},
+  {name:"沃尔特·弗雷泽",nameEn:"Walt Frazier",team:"尼克斯",number:10,position:"控球后卫",age:81,championships:2,mvp:0,fmvp:1,allNba:6,isActive:false,difficulty:"hard",points:15581,rank:147},
+  {name:"阿蒂斯·吉尔摩",nameEn:"Artis Gilmore",team:"凯尔特人",number:30,position:"中锋",age:76,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:15579,rank:148},
+  {name:"丹尼斯·约翰逊",nameEn:"Dennis Johnson",team:"凯尔特人",number:3,position:"控球后卫",age:71,championships:3,mvp:0,fmvp:1,allNba:2,isActive:false,difficulty:"hard",points:15535,rank:150},
+  {name:"鲍勃·丹德里奇",nameEn:"Bob Dandridge",team:"雄鹿",number:10,position:"小前锋",age:78,championships:2,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15530,rank:151},
+  {name:"萨姆·琼斯",nameEn:"Sam Jones",team:"凯尔特人",number:24,position:"得分后卫",age:93,championships:10,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:15411,rank:152},
+  {name:"蒂姆·哈达威",nameEn:"Tim Hardaway",team:"独行侠",number:10,position:"控球后卫",age:59,championships:0,mvp:0,fmvp:0,allNba:5,isActive:false,difficulty:"easy",points:15373,rank:153},
+  {name:"迪克·巴内特",nameEn:"Dick Barnett",team:"尼克斯",number:12,position:"得分后卫",age:89,championships:2,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15358,rank:154},
+  {name:"肖恩·坎普",nameEn:"Shawn Kemp",team:"魔术",number:40,position:"大前锋",age:56,championships:0,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:15347,rank:155},
+  {name:"萨姆·帕金斯",nameEn:"Sam Perkins",team:"步行者",number:14,position:"大前锋",age:65,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15324,rank:156},
+  {name:"约翰·德鲁",nameEn:"John Drew",team:"爵士",number:22,position:"大前锋",age:71,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15291,rank:157},
+  {name:"多诺万·米切尔",nameEn:"Donovan Mitchell",team:"骑士",number:45,position:"得分后卫",age:29,championships:0,mvp:0,fmvp:0,allNba:2,isActive:true,difficulty:"easy",points:15272,rank:158},
+  {name:"安德鲁·威金斯",nameEn:"Andrew Wiggins",team:"热火",number:22,position:"小前锋",age:31,championships:1,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:15214,rank:159},
+  {name:"朱利叶斯·兰德尔",nameEn:"Julius Randle",team:"篮网",number:30,position:"大前锋",age:31,championships:0,mvp:0,fmvp:0,allNba:2,isActive:true,difficulty:"hard",points:15184,rank:160},
+  {name:"拜伦·斯科特",nameEn:"Byron Scott",team:"湖人",number:4,position:"得分后卫",age:65,championships:3,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15097,rank:161},
+  {name:"迪克·范阿斯戴尔",nameEn:"Dick Van Arsdale",team:"太阳",number:5,position:"得分后卫",age:83,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15079,rank:162},
+  {name:"艾尔·霍福德",nameEn:"Al Horford",team:"勇士",number:20,position:"中锋",age:40,championships:1,mvp:0,fmvp:0,allNba:1,isActive:true,difficulty:"hard",points:15077,rank:163},
+  {name:"谢里夫·阿卜杜-拉希姆",nameEn:"Shareef Abdur-Rahim",team:"老鹰",number:3,position:"大前锋",age:49,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15028,rank:164},
+  {name:"卢卡·东契奇",nameEn:"Luka Dončić",team:"湖人",number:77,position:"控球后卫",age:27,championships:0,mvp:0,fmvp:0,allNba:6,isActive:true,difficulty:"easy",points:15021,rank:165},
+  {name:"迈克·米切尔",nameEn:"Mike Mitchell",team:"骑士",number:30,position:"大前锋",age:70,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15016,rank:166},
+  {name:"理查德·杰弗森",nameEn:"Richard Jefferson",team:"篮网",number:24,position:"小前锋",age:46,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14904,rank:167},
+  {name:"詹姆斯·爱德华兹",nameEn:"James Edwards",team:"活塞",number:53,position:"中锋",age:70,championships:3,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14862,rank:168},
+  {name:"蒙塔·埃利斯",nameEn:"Monta Ellis",team:"勇士",number:8,position:"得分后卫",age:40,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14858,rank:169},
+  {name:"迈克·毕比",nameEn:"Mike Bibby",team:"尼克斯",number:10,position:"控球后卫",age:48,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14698,rank:170},
+  {name:"里奇·盖伦",nameEn:"Richie Guerin",team:"老鹰",number:19,position:"得分后卫",age:94,championships:0,mvp:0,fmvp:0,allNba:4,isActive:false,difficulty:"hard",points:14676,rank:171},
+  {name:"丹·伊塞尔",nameEn:"Dan Issel",team:"掘金",number:44,position:"中锋",age:77,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14659,rank:172},
+  {name:"杰森·理查德森",nameEn:"Jason Richardson",team:"76人",number:23,position:"得分后卫",age:45,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14644,rank:173},
+  {name:"普维斯·肖特",nameEn:"Purvis Short",team:"篮网",number:45,position:"小前锋",age:69,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14607,rank:175},
+  {name:"斯宾塞·海伍德",nameEn:"Spencer Haywood",team:"尼克斯",number:24,position:"大前锋",age:77,championships:1,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"hard",points:14592,rank:176},
+  {name:"哈里森·巴恩斯",nameEn:"Harrison Barnes",team:"马刺",number:40,position:"小前锋",age:34,championships:1,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:14572,rank:177},
+  {name:"阿兰·休斯顿",nameEn:"Allan Houston",team:"尼克斯",number:20,position:"得分后卫",age:55,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14551,rank:178},
+  {name:"保罗·米尔萨普",nameEn:"Paul Millsap",team:"76人",number:4,position:"大前锋",age:41,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14536,rank:179},
+  {name:"比尔·拉塞尔",nameEn:"Bill Russell",team:"凯尔特人",number:6,position:"中锋",age:92,championships:11,mvp:5,fmvp:0,allNba:11,isActive:false,difficulty:"hard",points:14522,rank:180},
+  {name:"布雷克·格里芬",nameEn:"Blake Griffin",team:"凯尔特人",number:91,position:"大前锋",age:37,championships:0,mvp:0,fmvp:0,allNba:5,isActive:false,difficulty:"easy",points:14513,rank:181},
+  {name:"肯巴·沃克",nameEn:"Kemba Walker",team:"独行侠",number:8,position:"控球后卫",age:36,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:14486,rank:182},
+  {name:"杰夫·格林",nameEn:"Jeff Green",team:"火箭",number:32,position:"小前锋",age:39,championships:1,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:14480,rank:183},
+  {name:"赫西·霍金斯",nameEn:"Hersey Hawkins",team:"公牛",number:3,position:"得分后卫",age:59,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14470,rank:184},
+  {name:"里基·皮尔斯",nameEn:"Ricky Pierce",team:"雄鹿",number:22,position:"得分后卫",age:66,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:14467,rank:185},
+  {name:"罗德·斯特里克兰",nameEn:"Rod Strickland",team:"猛龙",number:1,position:"控球后卫",age:60,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14463,rank:186},
+  {name:"内特·瑟蒙德",nameEn:"Nate Thurmond",team:"骑士",number:42,position:"中锋",age:85,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:14437,rank:187},
+  {name:"乔乔·怀特",nameEn:"Jo Jo White",team:"凯尔特人",number:13,position:"控球后卫",age:79,championships:2,mvp:0,fmvp:1,allNba:2,isActive:false,difficulty:"hard",points:14399,rank:188},
+  {name:"艾尔·杰弗森",nameEn:"Al Jefferson",team:"步行者",number:25,position:"中锋",age:41,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14343,rank:189},
+  {name:"扎克·拉文",nameEn:"Zach LaVine",team:"国王",number:8,position:"得分后卫",age:31,championships:0,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:14338,rank:190},
+  {name:"阿隆佐·莫宁",nameEn:"Alonzo Mourning",team:"热火",number:33,position:"中锋",age:56,championships:1,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"easy",points:14311,rank:191},
+  {name:"格伦·罗宾逊",nameEn:"Glenn Robinson",team:"马刺",number:13,position:"小前锋",age:53,championships:1,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:14234,rank:192},
+  {name:"汤姆·范阿斯戴尔",nameEn:"Tom Van Arsdale",team:"太阳",number:4,position:"小前锋",age:83,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14232,rank:193},
+  {name:"赛迪斯·杨",nameEn:"Thaddeus Young",team:"太阳",number:30,position:"大前锋",age:38,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14225,rank:194},
+  {name:"埃里克·戈登",nameEn:"Eric Gordon",team:"76人",number:23,position:"得分后卫",age:37,championships:0,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:14167,rank:195},
+  {name:"埃迪·琼斯",nameEn:"Eddie Jones",team:"热火",number:6,position:"得分后卫",age:54,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:14155,rank:196},
+  {name:"杰森·塔图姆",nameEn:"Jayson Tatum",team:"凯尔特人",number:0,position:"小前锋",age:28,championships:1,mvp:0,fmvp:1,allNba:4,isActive:true,difficulty:"easy",points:14132,rank:197},
+  {name:"格斯·威廉姆斯",nameEn:"Gus Williams",team:"奇才",number:1,position:"控球后卫",age:72,championships:1,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:14093,rank:198},
+  {name:"戴夫·德布斯切尔",nameEn:"Dave DeBusschere",team:"尼克斯",number:22,position:"大前锋",age:85,championships:2,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:14053,rank:199},
+  {name:"马努·吉诺比利",nameEn:"Manu Ginóbili",team:"马刺",number:20,position:"得分后卫",age:49,championships:4,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"easy",points:14043,rank:201},
+  {name:"大卫·韦斯特",nameEn:"David West",team:"勇士",number:3,position:"大前锋",age:45,championships:2,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:14034,rank:202},
+  {name:"弗雷德·布朗",nameEn:"Fred Brown",team:"超音速",number:32,position:"得分后卫",age:78,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:14018,rank:203},
+  {name:"卡洛斯·布泽尔",nameEn:"Carlos Boozer",team:"湖人",number:5,position:"大前锋",age:44,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:13976,rank:204},
+  {name:"安德烈·伊戈达拉",nameEn:"Andre Iguodala",team:"勇士",number:9,position:"小前锋",age:42,championships:4,mvp:0,fmvp:1,allNba:0,isActive:false,difficulty:"easy",points:13968,rank:205},
+  {name:"阿尔万·亚当斯",nameEn:"Alvan Adams",team:"太阳",number:33,position:"中锋",age:72,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13910,rank:206},
+  {name:"鲍勃·拉夫",nameEn:"Bob Love",team:"超音速",number:10,position:"小前锋",age:83,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13895,rank:208},
+  {name:"马奎斯·约翰逊",nameEn:"Marques Johnson",team:"勇士",number:8,position:"小前锋",age:70,championships:0,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:13892,rank:209},
+  {name:"查克·珀森",nameEn:"Chuck Person",team:"超音速",number:45,position:"小前锋",age:62,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13858,rank:210},
+  {name:"德隆·威廉姆斯",nameEn:"Deron Williams",team:"骑士",number:8,position:"控球后卫",age:42,championships:0,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:13804,rank:211},
+  {name:"比尔·兰比尔",nameEn:"Bill Laimbeer",team:"活塞",number:40,position:"中锋",age:69,championships:2,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13790,rank:212},
+  {name:"佩贾·斯托亚科维奇",nameEn:"Peja Stojaković",team:"独行侠",number:16,position:"小前锋",age:49,championships:1,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:13647,rank:213},
+  {name:"比利·坎宁安",nameEn:"Billy Cunningham",team:"76人",number:32,position:"大前锋",age:83,championships:1,mvp:0,fmvp:0,allNba:4,isActive:false,difficulty:"hard",points:13626,rank:214},
+  {name:"奥兰多·伍尔里奇",nameEn:"Orlando Woolridge",team:"76人",number:0,position:"小前锋",age:66,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13623,rank:215},
+  {name:"泽维尔·麦克丹尼尔",nameEn:"Xavier McDaniel",team:"篮网",number:34,position:"小前锋",age:63,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13606,rank:216},
+  {name:"乔尔·恩比德",nameEn:"Joel Embiid",team:"76人",number:21,position:"中锋",age:32,championships:0,mvp:1,fmvp:0,allNba:6,isActive:true,difficulty:"easy",points:13544,rank:217},
+  {name:"克里斯·米德尔顿",nameEn:"Khris Middleton",team:"奇才",number:22,position:"小前锋",age:34,championships:1,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:13541,rank:218},
+  {name:"戴夫·考恩斯",nameEn:"Dave Cowens",team:"雄鹿",number:36,position:"中锋",age:77,championships:2,mvp:1,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:13516,rank:219},
+  {name:"杰伦·布朗",nameEn:"Jaylen Brown",team:"76人",number:7,position:"得分后卫",age:29,championships:1,mvp:0,fmvp:1,allNba:2,isActive:true,difficulty:"easy",points:13474,rank:220},
+  {name:"拜伦·戴维斯",nameEn:"Baron Davis",team:"尼克斯",number:5,position:"控球后卫",age:47,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:13447,rank:221},
+  {name:"史蒂夫·史密斯",nameEn:"Steve Smith",team:"黄蜂",number:8,position:"得分后卫",age:57,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13430,rank:223},
+  {name:"谢伊·吉尔杰斯-亚历山大",nameEn:"Shai Gilgeous-Alexander",team:"雷霆",number:2,position:"控球后卫",age:28,championships:0,mvp:2,fmvp:0,allNba:4,isActive:true,difficulty:"easy",points:13411,rank:224},
+  {name:"弗拉德·迪瓦茨",nameEn:"Vlade Divac",team:"湖人",number:12,position:"中锋",age:58,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:13398,rank:225},
+  {name:"鲁迪·汤姆贾诺维奇",nameEn:"Rudy Tomjanovich",team:"火箭",number:45,position:"大前锋",age:77,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13383,rank:226},
+  {name:"罗尔·邓",nameEn:"Luol Deng",team:"湖人",number:9,position:"小前锋",age:41,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:13361,rank:227},
+  {name:"杰梅因·奥尼尔",nameEn:"Jermaine O'Neal",team:"勇士",number:7,position:"大前锋",age:47,championships:0,mvp:0,fmvp:0,allNba:3,isActive:false,difficulty:"hard",points:13309,rank:228},
+  {name:"艾尔·哈灵顿",nameEn:"Al Harrington",team:"奇才",number:3,position:"大前锋",age:46,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13237,rank:229},
+  {name:"杰伦·罗斯",nameEn:"Jalen Rose",team:"太阳",number:8,position:"小前锋",age:53,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13220,rank:230},
+  {name:"科里·马盖蒂",nameEn:"Corey Maggette",team:"活塞",number:50,position:"小前锋",age:46,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13198,rank:231},
+  {name:"凯文·约翰逊",nameEn:"Kevin Johnson",team:"太阳",number:7,position:"控球后卫",age:60,championships:0,mvp:0,fmvp:0,allNba:4,isActive:false,difficulty:"hard",points:13127,rank:232},
+  {name:"慈世平",nameEn:"Metta World Peace",team:"湖人",number:37,position:"小前锋",age:46,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13058,rank:233},
+  {name:"杰夫·穆林斯",nameEn:"Jeff Mullins",team:"勇士",number:23,position:"得分后卫",age:84,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:13017,rank:234},
+  {name:"霍勒斯·格兰特",nameEn:"Horace Grant",team:"湖人",number:54,position:"大前锋",age:61,championships:4,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12996,rank:235},
+  {name:"斯蒂芬·杰克逊",nameEn:"Stephen Jackson",team:"快船",number:1,position:"得分后卫",age:48,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12976,rank:237},
+  {name:"鲍勃·布泽尔",nameEn:"Bob Boozer",team:"雄鹿",number:20,position:"大前锋",age:89,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12964,rank:238},
+  {name:"肯德尔·吉尔",nameEn:"Kendall Gill",team:"雄鹿",number:12,position:"得分后卫",age:58,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12914,rank:239},
+  {name:"德里克·科尔曼",nameEn:"Derrick Coleman",team:"活塞",number:44,position:"大前锋",age:59,championships:0,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:12884,rank:240},
+  {name:"韦曼·蒂斯代尔",nameEn:"Wayman Tisdale",team:"太阳",number:23,position:"大前锋",age:62,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12878,rank:241},
+  {name:"里克·施密茨",nameEn:"Rik Smits",team:"步行者",number:45,position:"中锋",age:59,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12871,rank:242},
+  {name:"约纳斯·瓦兰丘纳斯",nameEn:"Jonas Valančiūnas",team:"掘金",number:17,position:"中锋",age:34,championships:0,mvp:0,fmvp:0,allNba:0,isActive:true,difficulty:"hard",points:12846,rank:243},
+  {name:"帕斯卡尔·西亚卡姆",nameEn:"Pascal Siakam",team:"步行者",number:43,position:"大前锋",age:32,championships:1,mvp:0,fmvp:0,allNba:2,isActive:true,difficulty:"hard",points:12810,rank:244},
+  {name:"保罗·韦斯特法尔",nameEn:"Paul Westphal",team:"太阳",number:44,position:"得分后卫",age:75,championships:1,mvp:0,fmvp:0,allNba:4,isActive:false,difficulty:"hard",points:12809,rank:246},
+  {name:"西德尼·威克斯",nameEn:"Sidney Wicks",team:"快船",number:21,position:"大前锋",age:76,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12803,rank:247},
+  {name:"德马库斯·考辛斯",nameEn:"DeMarcus Cousins",team:"掘金",number:15,position:"中锋",age:35,championships:0,mvp:0,fmvp:0,allNba:2,isActive:false,difficulty:"hard",points:12802,rank:248},
+  {name:"拉马尔·奥多姆",nameEn:"Lamar Odom",team:"快船",number:7,position:"大前锋",age:46,championships:2,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12781,rank:249},
+  {name:"米基·约翰逊",nameEn:"Mickey Johnson",team:"勇士",number:43,position:"大前锋",age:73,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12748,rank:250},
+  {name:"迈克尔·芬利",nameEn:"Michael Finley",team:"独行侠",number:4,position:"得分后卫",age:53,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:17306,rank:250},
+  {name:"杰克·希克马",nameEn:"Jack Sikma",team:"超音速",number:43,position:"中锋",age:70,championships:1,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:17287,rank:250},
+  {name:"拉希德·华莱士",nameEn:"Rasheed Wallace",team:"凯尔特人",number:30,position:"大前锋",age:51,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:16006,rank:250},
+  {name:"拉沙德·刘易斯",nameEn:"Rashard Lewis",team:"热火",number:9,position:"大前锋",age:46,championships:1,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:15579,rank:250},
+  {name:"贾马尔·威尔克斯",nameEn:"Jamaal Wilkes",team:"快船",number:52,position:"小前锋",age:73,championships:4,mvp:0,fmvp:0,allNba:1,isActive:false,difficulty:"hard",points:14644,rank:250},
+  {name:"杰里·卢卡斯",nameEn:"Jerry Lucas",team:"尼克斯",number:47,position:"大前锋",age:86,championships:1,mvp:0,fmvp:0,allNba:5,isActive:false,difficulty:"hard",points:14053,rank:250},
+  {name:"罗恩·哈珀",nameEn:"Ron Harper",team:"湖人",number:4,position:"得分后卫",age:62,championships:5,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:13910,rank:250},
+  {name:"克利夫·哈根",nameEn:"Cliff Hagan",team:"老鹰",number:16,position:"小前锋",age:94,championships:1,mvp:0,fmvp:0,allNba:5,isActive:false,difficulty:"hard",points:13447,rank:250},
+  {name:"约什·史密斯",nameEn:"Josh Smith",team:"鹈鹕",number:5,position:"大前锋",age:40,championships:0,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12996,rank:250},
+  {name:"迈克尔·汤普森",nameEn:"Mychal Thompson",team:"湖人",number:43,position:"中锋",age:71,championships:2,mvp:0,fmvp:0,allNba:0,isActive:false,difficulty:"hard",points:12810,rank:250},
+];
+const SEARCH=PLAYERS;
+
+function fuzzyMatch(q,n,ne){q=q.toLowerCase().replace(/[^a-z0-9一-鿿\s·]/g,"");if(!q)return 0;const nc=n.toLowerCase();if(nc===q)return 1;if(nc.includes(q))return .85;if(ne){const e=ne.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9\s]/g,"");if(e===q)return .95;if(e.startsWith(q))return .8;if(e.includes(q))return .65;const qp=q.split(/\s+/),ep=e.split(/\s+/);let m=0;for(const p of qp){if(p.length<2)continue;for(const x of ep){if(x===p){m+=2;break}else if(x.startsWith(p)){m+=1;break}}}const t=qp.filter(p=>p.length>=2).length;if(t>0&&m/t>.4)return .5}return 0}
+function search(q){return SEARCH.map(p=>({p,s:fuzzyMatch(q,p.name,p.nameEn)})).filter(r=>r.s>.3).sort((a,b)=>b.s-a.s).slice(0,8).map(r=>r.p)}
+function compareNum(g,t,k){if(g===t)return{value:g,level:"correct"};return{value:g,level:"wrong",hint:t>g?"↑":"↓"}}
+function comparePos(g,t){if(g===t)return{value:g,level:"correct"};const pg=["控球后卫","得分后卫"],sf=["小前锋","大前锋"],bg=["大前锋","中锋"];if((pg.includes(g)&&pg.includes(t))||(sf.includes(g)&&sf.includes(t))||(bg.includes(g)&&bg.includes(t)))return{value:g,level:"close"};return{value:g,level:"wrong"}}
+function compare(g,t){return{name:g.name,correct:g.name===t.name,attrs:{team:{value:g.team,level:g.team===t.team?"correct":"wrong"},position:comparePos(g.position,t.position),age:compareNum(g.age,t.age),championships:compareNum(g.championships,t.championships),mvp:compareNum(g.mvp,t.mvp),fmvp:compareNum(g.fmvp,t.fmvp),allNba:compareNum(g.allNba,t.allNba)}}}
+function cell(a){if(!a||a.value===undefined||a.value===null)return'<td class="wrong">-</td>';const c=a.level,arrow=a.hint?`<span style="margin-left:2px;font-size:.7rem">${a.hint==="↑"?"↑":"↓"}</span>`:"";return`<td class="${c}">${a.value}${arrow}</td>`}
+
+// Game state
+let room=null,pNum=null,rPoll=null,tmr=null,myW=0,oppW=0,roundN=1;
+let guesses=[],oppFB=[],target=null;
+
+function render(s){
+  const v=document.getElementById("view");
+  if(s==="lobby") v.innerHTML=`<div class="lobby"><h3>🏀 竞技对战</h3><p>随机匹配玩家 · BO3赛制 · 60秒限时<br>率先赢下2轮者获胜</p><button class="btn btn-primary" style="font-size:1.1rem;padding:14px 40px" onclick="startSearch()">🎲 快速匹配</button></div>`;
+  else if(s==="searching") v.innerHTML=`<div class="searching"><div class="spinner"></div><h3>🎲 正在匹配对手</h3><p style="color:var(--text2)">等待在线玩家...</p><button class="btn btn-secondary" style="margin-top:12px" onclick="cancel()">取消</button></div>`;
+  else if(s==="found"){guesses=[];oppFB=[];v.innerHTML=`<div class="ready-box"><h3>🤝 对手已匹配</h3><div class="score" style="margin:16px 0"><div class="s"><div class="n">你</div><div class="p me">${myW}</div></div><div class="vs">VS</div><div class="s"><div class="n">对手</div><div class="p opp">${oppW}</div></div></div><p style="color:var(--text2);font-size:.85rem">BO3 · 率先赢得2轮者获胜</p><button class="btn btn-primary" style="margin-top:12px" id="rdy-btn" onclick="doReady()">✅ 准备</button><p style="color:var(--text2);font-size:.75rem;margin-top:8px" id="rdy-status">等待双方准备...</p></div>`;}
+  else if(s==="playing") renderGame(v);
+  else if(s==="match-end") renderMatchEnd(v);
+}
+async function startSearch(){
+  render("searching");
+  const list=await api("GET","rooms?match_status=eq.matching&p2_id=is.null&order=created_at&limit=1&select=*");
+  if(list&&list.length&&list[0].p1_id!==pid){
+    const r=list[0];await api("PATCH","rooms?id=eq."+r.id,{p2_id:pid,match_status:"found"});room=r;pNum=2;myW=0;oppW=0;startPoll(r.id);render("found");return;
+  }
+  const d=await api("POST","rooms",{code:Array.from({length:6},()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random()*36)]).join(""),p1_id:pid,match_status:"matching",p1_rounds_won:0,p2_rounds_won:0,round:1});
+  if(!d||!d.length){render("lobby");return;}
+  room=d[0];pNum=1;myW=0;oppW=0;startPoll(d[0].id);
+}
+function startPoll(rid){
+  stopPoll();rPoll=setInterval(async()=>{
+    try{const l=await api("GET","rooms?id=eq."+rid+"&select=*");if(!l||!l.length)return;const r=l[0];room=r;
+    const op=pNum===1?2:1;
+    if(r.p1_ready&&r.p2_ready&&r.match_status==="found"){startRound(r);return;}
+    if(r.match_status==="playing"){oppFB=r["p"+op+"_guess_feedback"]||[];updateOpp();return;}
+    if(r.match_status==="round_end"){room=r;endRound(r);stopPoll();return;}
+    if(r.match_status==="match_end"){room=r;matchEnd();stopPoll();return;}
+    const st=document.getElementById("rdy-status");if(st)st.textContent=pNum===1?(r.p2_id?"对手已加入":"等待对手加入..."):"等待双方准备...";
+    }catch(e){}
+  },1500);
+}
+function stopPoll(){if(rPoll){clearInterval(rPoll);rPoll=null;}}
+async function doReady(){await api("PATCH","rooms?id=eq."+room.id,{["p"+pNum+"_ready"]:true});document.getElementById("rdy-btn").disabled=true;document.getElementById("rdy-btn").textContent="已准备 ✓";}
+async function startRound(r){
+  roundN=r.round||1;guesses=[];oppFB=[];target=PLAYERS[Math.floor(Math.random()*PLAYERS.length)];
+  await api("PATCH","rooms?id=eq."+r.id,{match_status:"playing",round:roundN,timer_end:new Date(Date.now()+62000).toISOString(),p1_guess_feedback:[],p2_guess_feedback:[],p1_ready:false,p2_ready:false,target_json:target,target_player_name:target.name,target_player_team:target.team,target_player_rank:target.rank,target_player_points:target.points});
+  render("playing");startTimer();
+}
+function renderGame(v){
+  v.innerHTML=`<div class="timer safe" id="timer">60</div>
+    <div class="score"><div class="s"><div class="n">你</div><div class="p me">${myW}</div></div><div class="vs">VS</div><div class="s"><div class="n">对手</div><div class="p opp">${oppW}</div></div></div>
+    <div class="opp-bar">对手猜测: <strong id="oc">${(oppFB||[]).length}/8</strong><div class="dots" id="od"></div></div>
+    <div class="search-wrap"><input type="text" class="search-input" id="inp" placeholder="输入球员名搜索..." autocomplete="off"><div class="search-dropdown" id="dd"></div></div>
+    <div class="game-table-wrap"><table class="game-table"><thead><tr><th>球员</th><th>队伍</th><th>位置</th><th>年龄</th><th>总冠军</th><th>MVP</th><th>FMVP</th><th>最佳阵容</th><th>状态</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div style="text-align:center;font-size:.8rem;color:var(--text2)">你的猜测: <strong style="color:var(--accent)" id="ct">${guesses.length}/8</strong></div>`;
+  const inp=document.getElementById("inp"),dd=document.getElementById("dd");
+  inp.addEventListener("input",()=>{const q=inp.value.trim();if(!q){dd.classList.remove("show");dd.innerHTML="";return;}const r=search(q);dd.innerHTML=r.length?r.map(p=>`<div class="search-item" data-n="${p.name}"><span class="name">${p.name}</span><span class="team">${p.team}</span></div>`).join(""):'<div class="no-results">未找到</div>';dd.classList.add("show")});
+  dd.addEventListener("click",e=>{const el=e.target.closest(".search-item");if(!el)return;const p=PLAYERS.find(x=>x.name===el.dataset.n);if(p)doGuess(p)});
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){const r=search(inp.value.trim());if(r.length)doGuess(r[0])}});
+  updateOpp();
+}
+function updateOpp(){
+  const fb=oppFB||[];const el=document.getElementById("od");if(!el)return;const oc=document.getElementById("oc");if(oc)oc.textContent=fb.length+"/8";
+  el.innerHTML=fb.map(c=>`<span style="background:${c==="correct"?"#22c55e":c==="close"?"#eab308":"#334155"}"></span>`).join("");
+}
+async function doGuess(p){
+  if(!target||guesses.length>=8||guesses.some(x=>x.name===p.name))return;guesses.push(p);
+  const fb=compare(p,target);
+  await api("PATCH","rooms?id=eq."+room.id,{["p"+pNum+"_guess_feedback"]:guesses.map(x=>{const f=compare(x,target);return f.correct?"correct":(f.attrs.team.level==="correct"||f.attrs.position.level==="correct"||Object.values(f.attrs).some(a=>a.level==="correct")?"close":"wrong")})});
+  document.getElementById("ct").textContent=guesses.length+"/8";
+  document.getElementById("tb").innerHTML=guesses.map((x,i)=>{const f=compare(x,target);return`<tr class="${i===guesses.length-1?"row-latest":""} ${f.correct?"row-correct":""}"><td class="name-cell ${f.correct?"correct":"wrong"}">${f.name}</td>${cell(f.attrs.team)}${cell(f.attrs.position)}${cell(f.attrs.age)}${cell(f.attrs.championships)}${cell(f.attrs.mvp)}${cell(f.attrs.fmvp)}${cell(f.attrs.allNba)}${f.correct?'<td class="correct">现役</td>':'<td class="wrong">-</td>'}</tr>`}).join("");
+  document.getElementById("inp").value="";document.getElementById("dd").classList.remove("show");
+  if(fb.correct){
+    const wcol="p"+pNum+"_rounds_won";const r=await api("GET","rooms?id=eq."+room.id+"&select=*");const cr=r[0];const mw=(cr[wcol]||0)+1;
+    await api("PATCH","rooms?id=eq."+room.id,{[wcol]:mw,match_status:mw>=2?"match_end":"round_end"});stopPoll();return;
+  }
+  if(guesses.length>=8&&(oppFB||[]).length>=8){await api("PATCH","rooms?id=eq."+room.id,{match_status:"round_end"});stopPoll();}
+}
+function startTimer(){if(tmr)clearInterval(tmr);let s=60;tmr=setInterval(()=>{s--;const el=document.getElementById("timer");if(!el){clearInterval(tmr);return;}el.textContent=s;el.className="timer "+(s>30?"safe":s>10?"warn":"danger");if(s<=0){clearInterval(tmr);onTimeout()}},1000)}
+async function onTimeout(){const r=await api("GET","rooms?id=eq."+room.id+"&select=*");if(r[0]&&r[0].match_status==="playing")await api("PATCH","rooms?id=eq."+r[0].id,{match_status:"round_end"});}
+async function endRound(r){
+  clearInterval(tmr);if(!target)return;
+  const op=pNum===1?2:1;
+  myW=r["p"+pNum+"_rounds_won"]||0;oppW=r["p"+op+"_rounds_won"]||0;
+  const iWon=r["p"+pNum+"_rounds_won"]>(myW-curW());const curW=()=>pNum===1?r.p1_rounds_won_prev||0:r.p2_rounds_won_prev||0;
+  let iWon2=false;
+  if(pNum===1) iWon2=(r.p1_rounds_won||0)>(room.p1_rounds_won||0);
+  else iWon2=(r.p2_rounds_won||0)>(room.p2_rounds_won||0);
+  const ov=document.createElement("div");ov.className="modal-overlay";
+  ov.innerHTML=`<div class="modal ${iWon2?"win":"draw"}"><h3>${iWon2?"🎉 你猜中了！":"⏰ 时间到！"}</h3><div class="pname">${target.name}</div><p style="color:var(--text2)">${target.team} · ${target.position}</p><div class="grid"><div class="k">总冠军</div><div class="v">${target.championships}</div><div class="k">MVP</div><div class="v">${target.mvp}</div><div class="k">FMVP</div><div class="v">${target.fmvp}</div><div class="k">最佳阵容</div><div class="v">${target.allNba}次</div><div class="k">历史排名</div><div class="v">第${target.rank}名</div><div class="k">生涯得分</div><div class="v">${target.points.toLocaleString()}</div></div><div class="score" style="margin:12px 0"><div class="s"><div class="n">你</div><div class="p me">${myW}</div></div><div class="vs">VS</div><div class="s"><div class="n">对手</div><div class="p opp">${oppW}</div></div></div><button class="btn btn-primary" onclick="nx()">${myW>=2||oppW>=2?"查看结果":"下一轮"}</button></div>`;
+  document.body.appendChild(ov);window._modal=ov;
+}
+async function nx(){
+  if(window._modal){window._modal.remove();window._modal=null;}
+  if(myW>=2||oppW>=2){matchEnd();return;}
+  roundN++;await api("PATCH","rooms?id=eq."+room.id,{round:roundN,match_status:"found",p1_ready:false,p2_ready:false});startPoll(room.id);render("found");
+}
+function matchEnd(){stopPoll();if(window._modal){window._modal.remove()}
+  const v=document.getElementById("view");const won=myW>oppW;
+  v.innerHTML=`<div class="match-result"><h2>${won?"🎉 你赢下了整场比赛！":"😢 对手获胜"}</h2><div class="fs"><span class="${won?'':'w'}">${myW}</span>:<span class="${won?'w':''}">${oppW}</span></div><p style="color:var(--text2)">${won?"率先拿下赛点":"对手率先拿下赛点"}</p><button class="btn btn-primary" style="margin-top:16px" onclick="quit()">返回大厅</button></div>`;}
+async function cancel(){if(room)await api("DELETE","rooms?id=eq."+room.id);stopPoll();room=null;render("lobby")}
+function quit(){stopPoll();room=null;myW=0;oppW=0;guesses=[];target=null;render("lobby")}
+// Init
+render("lobby");
+</script></body></html>
