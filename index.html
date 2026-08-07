@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NBA 勒一把 — 基于历史总得分榜的球员猜测游戏</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -136,6 +136,17 @@ header .sub{color:var(--text2);font-size:.75rem;margin-top:2px}
 .mp-result.draw{background:rgba(250,204,21,.1);border:1px solid rgba(250,204,21,.3);color:#facc15}
 .config-hint{padding:20px;text-align:center;color:var(--text2);font-size:.82rem;line-height:1.8}
 .config-hint code{background:var(--bg3);padding:2px 6px;border-radius:3px;font-size:.8rem}
+/* === DAILY + STATS === */
+.stats-bar{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.stats-item{flex:1;min-width:80px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;text-align:center}
+.stats-item .label{font-size:.7rem;color:var(--text2);margin-bottom:2px}
+.stats-item .value{font-size:1.15rem;font-weight:700;color:var(--accent)}
+.stats-item .rate{font-size:.75rem;color:var(--text2)}
+.daily-status{text-align:center;padding:24px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:16px}
+.daily-status h3{margin-bottom:8px}
+.daily-status .countdown{font-size:.85rem;color:var(--text2);margin-top:8px}
+.daily-answered{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3)}
+.daily-answered h3{color:#4ade80}
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
@@ -152,7 +163,6 @@ header .sub{color:var(--text2);font-size:.75rem;margin-top:2px}
   <button class="tab active" data-tab="game">🎮 游戏</button>
   <button class="tab" data-tab="browse">📋 球员列表</button>
   <button class="tab" data-tab="multi">🌐 联机对战</button>
-  
 </div>
 
 <div class="rules-box" id="rules-box">
@@ -177,6 +187,7 @@ header .sub{color:var(--text2);font-size:.75rem;margin-top:2px}
 </div>
 
 <div id="tab-game">
+  <div class="stats-bar" id="game-stats-bar"></div>
   <div class="info-bar">
     <div class="stat-badge">🎯 剩余 <strong id="remaining">8</strong> 次</div>
     <div class="difficulty-select">
@@ -207,6 +218,8 @@ header .sub{color:var(--text2);font-size:.75rem;margin-top:2px}
   </p>
 </div>
 </div>
+<div id="tab-daily" style="display:none">
+<div class="stats-bar" id="daily-stats-bar"></div>
 <div id="daily-content"></div>
 </div>
 <div id="tab-multi" style="display:none">
@@ -656,11 +669,11 @@ function makeGuess(player) {
   if (feedback.correct) {
     renderWin();
     $guessInput.disabled = true;
-    window._singleWon=true;
+    window._singleWon=true; recordGame("single",true,guesses.length);
   } else if (guesses.length >= 8) {
     renderLose();
     $guessInput.disabled = true;
-    
+    recordGame("single",false,8);
   }
 }
 
@@ -748,10 +761,10 @@ document.querySelectorAll(".tab").forEach(tab => {
     tab.classList.add("active");
     const tgt = tab.dataset.tab;
     document.getElementById("tab-game").style.display = tgt === "game" ? "block" : "none";
-
+    if (tgt === "game") fetchStats();
     document.getElementById("tab-browse").style.display = tgt === "browse" ? "block" : "none";
     document.getElementById("tab-multi").style.display = tgt === "multi" ? "block" : "none";
-    if (tgt === "multi") { if (!sb) mpInit(); mpRender("lobby"); }
+    if (tgt === "multi") {  mpRender("lobby"); }
     
   });
 });
@@ -796,20 +809,20 @@ function dailyDateStr() { return new Date(new Date().toLocaleString("en-US",{tim
 function dailyCountdown() { const n=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Shanghai"})); const mid=new Date(n);mid.setHours(24,0,0,0); const ms=mid-n; const h=Math.floor(ms/3600000); const m=Math.floor((ms%3600000)/60000); return h+"时"+m+"分"; }
 
 async function recordGame(mode,won,guessesUsed) {
-  if(!sb) return;
+  return;
   const col=(mode==="single"?"single":mode==="multi"?"multi":"daily");
-  const {data}=await sb.from("player_stats").select("*").eq("player_id",mpPlayerId).maybeSingle();
+  const data=await sb_get("player_stats?player_id=eq."+encodeURIComponent(mpPlayerId)+"&select=*");
   const row=data||{player_id:mpPlayerId,single_wins:0,single_total:0,multi_wins:0,multi_total:0,daily_wins:0,daily_total:0};
   row[col+"_wins"]+=(won?1:0); row[col+"_total"]+=1;
-  await sb.from("player_stats").upsert(row).eq("player_id",mpPlayerId);
+  await sb_upsert("player_stats",row,"player_id=eq."+encodeURIComponent(mpPlayerId));
   if(mode==="daily"){ const ds=dailyDateStr();
-    await sb.from("daily_plays").upsert({player_id:mpPlayerId,play_date:ds,won,guesses_used:guessesUsed,guesses_json:window._lastDailyGuesses||[]});
+    await sb_upsert("daily_plays",{player_id:mpPlayerId,play_date:ds,won,guesses_used:guessesUsed,guesses_json:window._lastDailyGuesses||[]},"player_id=eq."+encodeURIComponent(mpPlayerId)+"&play_date=eq."+ds);
   }
-
+  fetchStats();
 }
 async function fetchStats() {
   if(!sb){ document.getElementById("daily-stats-bar")&&(document.getElementById("daily-stats-bar").innerHTML=""); return; }
-  const {data}=await sb.from("player_stats").select("*").eq("player_id",mpPlayerId).maybeSingle();
+  const data=await sb_get("player_stats?player_id=eq."+encodeURIComponent(mpPlayerId)+"&select=*");
   const s=data||{single_wins:0,single_total:0,multi_wins:0,multi_total:0,daily_wins:0,daily_total:0};
   const fmt=(w,t)=>t?Math.round(w/t*100)+"%":"-";
   const bar=document.getElementById("daily-stats-bar")||document.getElementById("game-stats-bar"); if(!bar) return;
@@ -820,7 +833,7 @@ async function dailyRender() {
   const c=document.getElementById("daily-content"); if(!c) return;
   const t=dailyTarget(); const ds=dailyDateStr();
   if(!sb){ c.innerHTML=`<p style="text-align:center;color:var(--text2);padding:20px">需要配置 Supabase 才能使用每日挑战</p>`; return; }
-  const {data}=await sb.from("daily_plays").select("*").eq("player_id",mpPlayerId).eq("play_date",ds).maybeSingle();
+  const data=await sb_get("daily_plays?player_id=eq."+encodeURIComponent(mpPlayerId)+"&play_date=eq."+ds+"&select=*");
   if(data){ c.innerHTML=`<div class="daily-status daily-answered"><h3>✅ 今日已完成</h3><p>答案是 <strong>${t.name}</strong>（${t.team} · ${t.position}）</p><p style="font-size:.8rem;color:var(--text2)">你用了 ${data.guesses_used}/8 次，${data.won?"🎉 猜中了！":"❌ 未猜中"}</p><p class="countdown">⏰ ${dailyCountdown()} 后刷新</p></div>`; return; }
   window._dailyTarget=t; window._dailyGuesses=[]; window._dailyDone=false;
   c.innerHTML=`<div class="daily-status"><h3>📅 今日挑战</h3><p style="color:var(--text2);font-size:.85rem">每天每人仅一次机会，全球玩家同一天猜同一个球员</p><p class="countdown">⏰ 剩余时间: ${dailyCountdown()}</p></div><div class="search-wrap"><input type="text" class="search-input" id="daily-input" placeholder="输入球员名..." autocomplete="off"><div class="search-dropdown" id="daily-dropdown"></div></div><div class="game-table-wrap"><table class="game-table" id="daily-board"><thead><tr><th>球员</th><th>队伍</th><th>位置</th><th>年龄</th><th>总冠军</th><th>MVP</th><th>FMVP</th><th>最佳阵容</th><th>状态</th></tr></thead><tbody id="daily-body"></tbody></table></div><div style="text-align:center;font-size:.8rem;color:var(--text2)">猜测: <strong style="color:var(--accent)" id="daily-count">0/8</strong></div>`;
@@ -839,26 +852,54 @@ function dailyGuess(player) {
   if(g.length>=8){ window._dailyDone=true; window._lastDailyGuesses=g; recordGame("daily",false,8); setTimeout(()=>dailyRender(),500); }
 }
 
+
+// ============ SUPABASE via fetch (no external deps) ============
+const SUPABASE_URL = "https://bufvapllekiobkirndyj.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZnZhcGxsZWtpb2JraXJuZHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDI3OTIsImV4cCI6MjEwMTYxODc5Mn0.40q4bwEZZIkazJ-v-wJpwN3NbkeILCGwuns3ii9fxPE";
+const SB_REST = SUPABASE_URL + "/rest/v1";
+const SB_H = {"apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Content-Type":"application/json"};
+const SB_RETRY = {"apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Content-Type":"application/json","Prefer":"return=representation"};
+async function sb_get(path){const r=await fetch(SB_REST+"/"+path,{headers:SB_H});if(!r.ok)throw new Error(r.status);const t=await r.json();return t&&t.length?t[0]:null;}
+async function sb_list(path){const r=await fetch(SB_REST+"/"+path,{headers:SB_H});if(!r.ok)return[];return await r.json()||[];}
+async function sb_post(table,data){const r=await fetch(SB_REST+"/"+table,{method:"POST",headers:SB_RETRY,body:JSON.stringify(data)});if(!r.ok)throw new Error(r.status);const t=await r.json();return t&&t.length?t[0]:null;}
+async function sb_patch(table,data,filter){const r=await fetch(SB_REST+"/"+table+"?"+filter,{method:"PATCH",headers:SB_RETRY,body:JSON.stringify(data)});return r.ok;}
+async function sb_delete(table,filter){const r=await fetch(SB_REST+"/"+table+"?"+filter,{method:"DELETE",headers:SB_H});return r.ok;}
+async function sb_upsert(table,data,filter){const r=await fetch(SB_REST+"/"+table+"?"+filter,{method:"POST",headers:SB_RETRY,body:JSON.stringify(data)});if(!r.ok){const r2=await fetch(SB_REST+"/"+table+"?"+filter,{method:"PATCH",headers:SB_RETRY,body:JSON.stringify(data)});return r2.ok;}return true;}
+
+// Polling-based realtime replacement
+let mpPollTimer = null;
+function mpStartPoll(roomId) {
+  if(mpPollTimer) clearInterval(mpPollTimer);
+  mpPollTimer = setInterval(async () => {
+    if(!mpRoom) {clearInterval(mpPollTimer);return;}
+    try{const r=await sb_get("rooms?id=eq."+roomId+"&select=*");if(!r)return;
+    if(r.status==="playing"&&mpRoom.status!=="playing"){mpRoom=r;mpRender("playing");return;}
+    if(r.status==="finished"){mpOppWon=mpPlayerNum===1?r.p2_won:r.p1_won;if(!mpMyWon)recordGame("multi",mpOppWon?false:true,mpGuesses.length);mpRoom=r;mpRender("finished");clearInterval(mpPollTimer);return;}
+    mpOppGuesses=mpPlayerNum===1?r.p2_guesses:r.p1_guesses;mpRoom=r;
+    if(mpPlayerNum===1&&r.p2_id)mpRender("playing");
+    else if(mpRoom.status==="playing")mpRender("playing");
+    }catch(e){}
+  },2000);
+}
+function mpStopPoll(){if(mpPollTimer){clearInterval(mpPollTimer);mpPollTimer=null;}}
 // ============ MULTIPLAYER ============
 const SUPABASE_URL = "https://bufvapllekiobkirndyj.supabase.co";  // ← 填入你的 Supabase 项目 URL
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZnZhcGxsZWtpb2JraXJuZHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDI3OTIsImV4cCI6MjEwMTYxODc5Mn0.40q4bwEZZIkazJ-v-wJpwN3NbkeILCGwuns3ii9fxPE";  // ← 填入你的 Supabase anon key
 let sb = null;
 let mpRoom = null, mpPlayerNum = null, mpTarget = null;
 let mpGuesses = [], mpOppGuesses = 0, mpMyWon = false, mpOppWon = false;
-let mpChannel = null;
+
 const mpPlayerId = localStorage.getItem("mp_pid") || (() => { const id = crypto.randomUUID(); localStorage.setItem("mp_pid", id); return id; })();
 
-function mpInit() {
-  try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) { sb = null; }
-}
+function mpInit() { sb = true; }
 
 function mpRender(state) {
   const c = document.getElementById("mp-container");
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
+  /* configured */ if (false) {
     c.innerHTML = `<div class="config-hint"><p>🔧 <strong>联机对战需要配置 Supabase</strong></p><p>1. 注册 <code>supabase.com</code>（免费）并创建项目</p><p>2. 在 SQL Editor 中运行项目目录下的 <code>mp_schema.sql</code></p><p>3. 将项目 URL 和 anon key 填入本文件顶部的 <code>SUPABASE_URL</code> 和 <code>SUPABASE_KEY</code></p></div>`;
     return;
   }
-  if (!sb) { mpInit(); }
+  
   if (state === "lobby") mpRenderLobby(c);
   else if (state === "waiting") mpRenderWaiting(c);
   else if (state === "playing") mpRenderBoard(c);
@@ -893,13 +934,13 @@ async function mpCreate() {
   const code = Array.from({length:6}, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random()*36)]).join("");
   const target = pickRandomTarget();
   mpTarget = target;
-  const { data, error } = await sb.from("rooms").insert({
+  const data = await sb_post("rooms",{
     code, p1_id: mpPlayerId, target_name: target.name,
     target_json: target, status: "waiting"
-  }).select().single();
-  if (error) { alert("创建失败: " + error.message); return; }
+  });
+  if (!data) { alert("创建失败"); return; }
   mpRoom = data; mpPlayerNum = 1;
-  mpSubscribe(data.id);
+  mpStartPoll(data.id);
   mpRender("waiting");
 }
 
@@ -907,107 +948,82 @@ async function mpQuickMatch() {
   const c = document.getElementById("mp-container");
   c.innerHTML = `<div class="mp-waiting"><h3>🎲 正在匹配对手</h3><div class="spinner"></div><p style="color:var(--text2)">寻找在线玩家...</p><button class="btn btn-secondary" style="margin-top:16px" onclick="mpCancelMatch()">取消匹配</button></div>`;
   // look for existing quick-match waiting room
-  const { data, error } = await sb.from("rooms").select("*").eq("status","waiting").is("p2_id",null).like("code","M%").order("created_at").limit(1);
-  if (error) { alert("匹配失败: "+error.message); mpRender("lobby"); return; }
-  if (data && data.length > 0) {
-    const room = data[0];
+  const list = await sb_list("rooms?status=eq.waiting&p2_id=is.null&code=like.M*&order=created_at&limit=1&select=*");
+  if (list && list.length > 0) {
+    const room = list[0];
     if (room.p1_id === mpPlayerId) { alert("不能匹配自己"); mpRender("lobby"); return; }
-    const { error: e2 } = await sb.from("rooms").update({ p2_id: mpPlayerId, status: "playing" }).eq("id", room.id);
-    if (e2) { alert("加入失败"); mpRender("lobby"); return; }
+    if (!(await sb_patch("rooms",{ p2_id: mpPlayerId, status: "playing" },"id=eq."+room.id))) { mpRender("lobby"); return; }
     mpRoom = room; mpPlayerNum = 2; mpTarget = room.target_json;
-    mpSubscribe(room.id); mpRender("playing");
-    return;
+    mpStartPoll(room.id); mpRender("playing"); return;
   }
   // no waiting room — create one and wait
   const code = "M" + Array.from({length:5}, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random()*36)]).join("");
-  const target = pickRandomTarget();
-  mpTarget = target;
-  const { data: d, error: e3 } = await sb.from("rooms").insert({ code, p1_id: mpPlayerId, target_name: target.name, target_json: target, status: "waiting" }).select().single();
-  if (e3) { alert("创建失败"); mpRender("lobby"); return; }
-  mpRoom = d; mpPlayerNum = 1;
-  mpSubscribe(d.id);
+  const target = pickRandomTarget(); mpTarget = target;
+  const d = await sb_post("rooms",{ code, p1_id: mpPlayerId, target_name: target.name, target_json: target, status: "waiting" });
+  if (!d) { alert("创建失败"); mpRender("lobby"); return; }
+  mpRoom = d; mpPlayerNum = 1; mpStartPoll(d.id);
 }
 
 function mpCancelMatch() {
-  if (mpRoom) { sb.from("rooms").delete().eq("id", mpRoom.id).then(()=>{}); }
-  if (mpChannel) { sb.removeChannel(mpChannel); mpChannel = null; }
+  if (mpRoom) { sb_delete("rooms","id=eq."+mpRoom.id).then(()=>{}); }
+  mpStopPoll();
   mpRoom = null; mpPlayerNum = null; mpGuesses = []; mpRender("lobby");
 }
 
 async function mpJoin() {
   const code = document.getElementById("mp-join-code").value.trim().toUpperCase();
   if (code.length !== 6) { alert("请输入6位房间码"); return; }
-  const { data, error } = await sb.from("rooms").select("*").eq("code", code).single();
-  if (error || !data) { alert("房间不存在"); return; }
+  const data = await sb_get("rooms?code=eq."+encodeURIComponent(code)+"&select=*");
+  if (!data) { alert("房间不存在"); return; }
   if (data.status !== "waiting") { alert("房间已满或已结束"); return; }
   if (data.p1_id === mpPlayerId) { alert("不能加入自己的房间"); return; }
-  const { error: e2 } = await sb.from("rooms").update({ p2_id: mpPlayerId, status: "playing" }).eq("id", data.id);
+  const e2 = !(await sb_patch("rooms",{ p2_id: mpPlayerId, status: "playing" },"id=eq."+data.id));
   if (e2) { alert("加入失败"); return; }
   mpRoom = data; mpPlayerNum = 2; mpTarget = data.target_json;
-  mpSubscribe(data.id);
+  mpStartPoll(data.id);
   mpRender("playing");
 }
 
-function mpSubscribe(roomId) {
-  if (mpChannel) sb.removeChannel(mpChannel);
-  mpChannel = sb.channel("room-" + roomId)
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "rooms", filter: "id=eq." + roomId },
-      (payload) => {
-        const r = payload.new;
-        mpRoom = r;
-        if (r.status === "playing" && mpPlayerNum === 1) { mpRender("playing"); return; }
-        if (r.status === "finished") { mpOppWon = mpPlayerNum === 1 ? r.p2_won : r.p1_won;  mpRender("finished"); return; }
-        mpOppGuesses = mpPlayerNum === 1 ? r.p2_guesses : r.p1_guesses;
-        if (mpPlayerNum === 1 && r.p2_id && mpRoom.p2_id !== r.p2_id) { mpRoom = r; mpRender("playing"); return; }
-        mpRender("playing");
-      }
-    ).subscribe();
+
+
+function mpRenderResult(c) {
+  let cls, title, detail;
+  if (mpMyWon) {
+    cls = "win"; title = "🎉 你赢了！";
+    detail = `你用了 ${mpGuesses.length} 次猜中了 <strong>${mpTarget.name}</strong>！`;
+  } else if (mpOppWon) {
+    cls = "lose"; title = "😢 对手先猜对了";
+    detail = `答案是 <strong>${mpTarget.name}</strong>（${mpTarget.team} · ${mpTarget.position}）`;
+  } else {
+    cls = "draw"; title = "🤝 平局";
+    detail = `双方都没猜中，答案是 <strong>${mpTarget.name}</strong>（${mpTarget.team} · ${mpTarget.position}）`;
+  }
+  const el = document.createElement("div");
+  el.className = "mp-result " + cls;
+  el.innerHTML = `<h3>${title}</h3><p>${detail}</p>
+    <p style="font-size:.8rem;color:var(--text2)">历史得分榜第 ${mpTarget.rank} 名 · ${mpTarget.points.toLocaleString()} 分</p>
+    <button class="btn btn-primary" style="margin-top:12px" onclick="mpLeave()">返回大厅</button>`;
+  c.appendChild(el);
 }
 
-function mpRenderWaiting(c) {
-  c.innerHTML = `<div class="mp-waiting">
-    <h3>⏳ 等待对手加入</h3>
-    <div class="mp-create-code">${mpRoom.code}</div>
-    <p style="color:var(--text2)">将上方房间码发给对手</p>
-    <div class="spinner"></div>
-    <button class="btn btn-secondary" style="margin-top:16px" onclick="mpLeave()">取消</button>
-  </div>`;
+async function mpLeave() {
+  if (mpRoom && mpRoom.status === "waiting") {
+    await sb_delete("rooms","id=eq."+mpRoom.id);
+  }
+  mpStopPoll();
+  mpRoom = null; mpPlayerNum = null; mpTarget = null;
+  mpGuesses = []; mpOppGuesses = 0; mpMyWon = false; mpOppWon = false;
+  mpRender("lobby");
 }
 
-function mpRenderBoard(c) {
-  const oppName = mpPlayerNum === 1 ? "玩家B" : "玩家A";
-  const oppGuesses = mpOppGuesses;
-  const oppOnline = (mpPlayerNum === 1 && mpRoom.p2_id) || (mpPlayerNum === 2);
-  c.innerHTML = `<div class="mp-game">
-    <div class="mp-opponent">
-      <div class="dot ${oppOnline ? 'online' : 'offline'}"></div>
-      <div class="info">
-        <div class="name">${oppName}</div>
-        <div class="status">${oppOnline ? '已猜测 ' + oppGuesses + '/8 次' : '未加入'}</div>
-      </div>
-      <div style="font-size:.75rem;color:var(--text2)">🎯 ${oppGuesses}/8</div>
-    </div>
-    <div class="search-wrap">
-      <input type="text" class="search-input" id="mp-guess-input" placeholder="输入球员名搜索..." autocomplete="off">
-      <div class="search-dropdown" id="mp-guess-dropdown"></div>
-    </div>
-    <div class="game-table-wrap">
-      <table class="game-table" id="mp-game-board">
-        <thead><tr><th>球员</th><th>队伍</th><th>位置</th><th>年龄</th><th>总冠军</th><th>MVP</th><th>FMVP</th><th>最佳阵容</th><th>状态</th></tr></thead>
-        <tbody id="mp-game-body"></tbody>
-      </table>
-    </div>
-    <div style="text-align:center;font-size:.8rem;color:var(--text2)">
-      你的猜测: <strong style="color:var(--accent)">${mpGuesses.length}/8</strong>
-    </div>
-  </div>`;
-  if (!mpMyWon && !mpOppWon) mpBindSearch();
-}
+// ============ TAB SWITCH (patch into existing logic) ============
+// Override the tab click handler to also handle multi tab
+const origTabHandler = document.querySelector(".tab")?.onclick;
 
 // ============ INIT ============
 newGame();
 renderPlayerList();
-if (SUPABASE_URL && SUPABASE_KEY) { mpInit(); }
+if (true) { mpInit(); fetchStats(); }
 </script>
 </body>
 </html>
