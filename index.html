@@ -152,6 +152,35 @@ header .sub{color:var(--text2);font-size:.75rem;margin-top:2px}
 .mp-result.win{border-color:rgba(34,197,94,.3);box-shadow:0 0 30px rgba(34,197,94,.15)}
 .mp-result.lose{border-color:rgba(239,68,68,.3);box-shadow:0 0 30px rgba(239,68,68,.15)}
 .mp-result.draw{border-color:rgba(250,204,21,.3)}
+
+/* === MP OVERLAY === */
+.mp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:999;display:flex;align-items:center;justify-content:center}
+.mp-modal{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px 32px;max-width:400px;width:90%;text-align:center}
+.mp-modal.win{border-color:rgba(34,197,94,.3);box-shadow:0 0 30px rgba(34,197,94,.12)}
+.mp-modal.draw{border-color:rgba(250,204,21,.3)}
+.mp-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;margin:10px 0;font-size:.8rem;text-align:left;max-width:300px;margin-left:auto;margin-right:auto}
+.mp-grid .k{color:var(--text2)}.mp-grid .v{text-align:right;font-weight:600}
+.mp-timer{text-align:center;padding:8px;font-size:1.5rem;font-weight:800;border-radius:var(--radius);margin-bottom:10px;transition:all .3s}
+.mp-timer.safe{color:#4ade80;background:rgba(34,197,94,.08)}
+.mp-timer.warn{color:#facc15;background:rgba(250,204,21,.08);animation:pulse .5s infinite alternate}
+.mp-timer.danger{color:#f87171;background:rgba(239,68,68,.08);animation:pulse .3s infinite alternate}
+@keyframes pulse{from{opacity:1}to{opacity:.6}}
+.mp-score{display:flex;justify-content:center;gap:30px;margin-bottom:10px}
+.mp-score .s{text-align:center;font-size:1.6rem;font-weight:800;min-width:30px}
+.mp-score .n{font-size:.75rem;font-weight:600;color:var(--text2)}
+.mp-score .vs{font-size:1rem;color:var(--text2);padding-top:12px}
+.mp-opp{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;font-size:.8rem;color:var(--text2)}
+.mp-dots{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px;min-height:18px}
+.mp-dots span{width:14px;height:14px;border-radius:3px;display:inline-block}
+.mp-opp strong{color:var(--accent)}
+.mp-lobby{text-align:center;padding:50px 20px}
+.mp-lobby h3{margin-bottom:8px}
+.mp-searching{text-align:center;padding:50px 20px}
+.spinner{width:44px;height:44px;border:4px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:20px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mp-ready{text-align:center;padding:30px 20px}
+.mp-victory{text-align:center;padding:40px 20px}
+.mp-victory h2{font-size:1.4rem;margin-bottom:8px}
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
@@ -769,7 +798,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     if (tgt === "game" && sb) fetchStats();
     document.getElementById("tab-browse").style.display = tgt === "browse" ? "block" : "none";
     document.getElementById("tab-multi").style.display = tgt === "multi" ? "block" : "none";
-    if (tgt === "multi") { if (!sb) mpInit(); mpRender("lobby"); }
+    if (tgt === "multi") { if (!sb) mp("lobby"); }
   });
 });
 
@@ -856,278 +885,185 @@ function dailyGuess(player) {
   if(g.length>=8){ window._dailyDone=true; window._lastDailyGuesses=g; recordGame("daily",false,8); setTimeout(()=>dailyRender(),500); }
 }
 
-// ============ MULTIPLAYER ============
-const SUPABASE_URL = "https://bufvapllekiobkirndyj.supabase.co";  // ← 填入你的 Supabase 项目 URL
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZnZhcGxsZWtpb2JraXJuZHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDI3OTIsImV4cCI6MjEwMTYxODc5Mn0.40q4bwEZZIkazJ-v-wJpwN3NbkeILCGwuns3ii9fxPE";  // ← 填入你的 Supabase anon key
-let sb = null;
-let mpRoom = null, mpPlayerNum = null, mpTarget = null;
-let mpGuesses = [], mpOppGuesses = 0, mpMyWon = false, mpOppWon = false;
-let mpChannel = null;
-const mpPlayerId = localStorage.getItem("mp_pid") || (() => { const id = crypto.randomUUID(); localStorage.setItem("mp_pid", id); return id; })();
+// ============ MULTIPLAYER (modeled after csgofriberg architecture) ============
+const SUPABASE_URL = "https://bufvapllekiobkirndyj.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZnZhcGxsZWtpb2JraXJuZHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDI3OTIsImV4cCI6MjEwMTYxODc5Mn0.40q4bwEZZIkazJ-v-wJpwN3NbkeILCGwuns3ii9fxPE";
+const SB = SUPABASE_URL + "/rest/v1";
+const SBH = {"apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Content-Type":"application/json","Prefer":"return=representation"};
+async function sb(m,p,d){const o={method:m,headers:SBH};if(d)o.body=JSON.stringify(d);const r=await fetch(SB+"/"+p,o);if(!r.ok)throw new Error(r.status);return r.json()}
 
-function mpInit() {
-  try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) { sb = null; }
+const PID = localStorage.getItem("mp_pid")||(()=>{const id=crypto.randomUUID();localStorage.setItem("mp_pid",id);return id})();
+const ROUND_MS = 120000, POLL_MS = 1000, NEXT_DELAY = 6000;
+
+// === State (mirrors RoomState in original) ===
+let R = {id:null,pnum:null,myScore:0,oppScore:0,status:"lobby",round:1,bo:2};
+let mg=[], oppFB=[], mt=null, roundActive=false, clockAnchor=null;
+let pollId=null, tmrId=null;
+
+// === Render ===
+function mp(state){
+  const v = document.getElementById("mp-container"); if(!v) return;
+  R.status = state;
+  if(state==="lobby") v.innerHTML=`<div class="mp-lobby"><h3>🏀 联机对战</h3><p style="color:var(--text2);font-size:.85rem">随机匹配 · BO3赛制 · 120秒限时</p><button class="btn btn-primary" style="font-size:1.1rem;padding:14px 40px;margin-top:16px" onclick="mpFind()">🎲 快速匹配</button></div>`;
+  else if(state==="searching") v.innerHTML=`<div class="mp-searching"><div class="spinner"></div><h3>🎲 正在匹配</h3><p style="color:var(--text2)">等待在线玩家...</p><button class="btn btn-secondary" style="margin-top:12px" onclick="mpCancel()">取消</button></div>`;
+  else if(state==="found") mpFound(v);
+  else if(state==="playing") mpBoard(v);
+  else if(state==="finished") mpMatchResult(v);
 }
-
-function mpRender(state) {
-  const c = document.getElementById("mp-container");
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    c.innerHTML = `<div class="config-hint"><p>🔧 <strong>联机对战需要配置 Supabase</strong></p><p>1. 注册 <code>supabase.com</code>（免费）并创建项目</p><p>2. 在 SQL Editor 中运行项目目录下的 <code>mp_schema.sql</code></p><p>3. 将项目 URL 和 anon key 填入本文件顶部的 <code>SUPABASE_URL</code> 和 <code>SUPABASE_KEY</code></p></div>`;
-    return;
+// === Lobby / Search ===
+async function mpFind(){
+  mp("searching");
+  const list = await sb("GET","rooms?match_status=eq.matching&p2_id=is.null&order=created_at&limit=1&select=*");
+  if(list&&list.length&&list[0].p1_id!==PID){
+    const r=list[0]; await sb("PATCH","rooms?id=eq."+r.id,{p2_id:PID,match_status:"found"});
+    R={...R,id:r.id,pnum:2,myScore:0,oppScore:0}; mpPoll(r.id); mp("found"); return;
   }
-  if (!sb) { mpInit(); }
-  if (state === "lobby") mpRenderLobby(c);
-  else if (state === "waiting") mpRenderWaiting(c);
-  else if (state === "playing") mpRenderBoard(c);
-  else if (state === "finished") { mpRenderResult(c); }
+  const d=await sb("POST","rooms",{code:Array.from({length:6},()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random()*36)]).join(""),p1_id:PID,match_status:"matching",p1_rounds_won:0,p2_rounds_won:0,round:1});
+  if(!d||!d.length){mp("lobby");return}
+  R={...R,id:d[0].id,pnum:1,myScore:0,oppScore:0}; mpPoll(d[0].id);
 }
-
-function mpRenderLobby(c) {
-  c.innerHTML = `<div class="mp-lobby">
-    <h3>🏀 联机对战</h3>
-    <p>与世界各地的玩家同时猜测同一个神秘球员，谁先猜对谁赢！</p>
-    <button class="btn btn-primary" style="font-size:1.05rem;padding:14px 40px" onclick="mpQuickMatch()">🎲 快速匹配</button>
-    <p style="font-size:.75rem;color:var(--text2);margin-top:4px">自动匹配在线对手</p>
-    <div style="margin-top:20px;display:flex;gap:10px">
-      <button class="btn btn-secondary" style="flex:1" onclick="mpCreate()">🎮 创建房间</button>
-      <button class="btn btn-secondary" style="flex:1" onclick="mpShowJoin()">🔗 加入房间</button>
-    </div>
-  </div>`;
+async function mpCancel(){if(R.id)await sb("DELETE","rooms?id=eq."+R.id);mpStop();mp("lobby")}
+// === Found / Ready ===
+function mpFound(v){
+  v.innerHTML=`<div class="mp-ready"><h3>🤝 对手已匹配</h3><div class="mp-score"><div><div class="n">你</div><div class="s">${R.myScore}</div></div><div class="vs">VS</div><div><div class="n">对手</div><div class="s">${R.oppScore}</div></div></div><p style="color:var(--text2);font-size:.85rem">BO${R.bo} · 率先赢得${Math.ceil(R.bo/2)}轮者胜</p><button class="btn btn-primary" style="margin-top:12px" id="rdy" onclick="mpReady()">✅ 准备</button><p style="color:var(--text2);font-size:.75rem;margin-top:8px" id="rdys">等待双方准备...</p></div>`;
 }
-function mpShowJoin() {
-  const c = document.getElementById("mp-container");
-  c.innerHTML = `<div class="mp-lobby">
-    <button class="btn btn-secondary" style="margin-bottom:20px" onclick="mpRender('lobby')">← 返回</button>
-    <h3>🔗 加入房间</h3>
-    <div style="padding:16px;background:var(--bg3);border-radius:var(--radius-lg)">
-      <input class="mp-input" id="mp-join-code" placeholder="输入6位房间码" maxlength="6" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
-      <button class="btn btn-primary" style="margin-top:8px;width:100%" onclick="mpJoin()">加入房间</button>
-    </div>
-  </div>`;
+async function mpReady(){
+  await sb("PATCH","rooms?id=eq."+R.id,{["p"+R.pnum+"_ready"]:true});
+  document.getElementById("rdy").disabled=true;
+  document.getElementById("rdy").textContent="已准备 ✓";
 }
-
-async function mpCreate() {
-  const code = Array.from({length:6}, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random()*36)]).join("");
-  const target = pickRandomTarget();
-  mpTarget = target;
-  const { data, error } = await sb.from("rooms").insert({
-    code, p1_id: mpPlayerId, target_name: target.name,
-    target_json: target, status: "waiting"
-  }).select().single();
-  if (error) { alert("创建失败: " + error.message); return; }
-  mpRoom = data; mpPlayerNum = 1;
-  mpSubscribe(data.id);
-  mpRender("waiting");
+// === Game Board (renders ONCE) ===
+function mpBoard(v){
+  v.innerHTML=`<div class="mp-timer safe" id="t">120</div>
+    <div class="mp-score"><div><div class="n">你</div><div class="s">${R.myScore}</div></div><div class="vs">VS</div><div><div class="n">对手</div><div class="s">${R.oppScore}</div></div></div>
+    <div class="mp-opp"><span>对手猜测: </span><strong id="oc">${oppFB.length}/8</strong><div class="mp-dots" id="od"></div></div>
+    <div class="search-wrap"><input type="text" class="search-input" id="mpi" placeholder="输入球员名搜索..." autocomplete="off"><div class="search-dropdown" id="mpd"></div></div>
+    <div class="game-table-wrap"><table class="game-table"><thead><tr><th>球员</th><th>队伍</th><th>位置</th><th>年龄</th><th>总冠军</th><th>MVP</th><th>FMVP</th><th>最佳阵容</th><th>状态</th></tr></thead><tbody id="mpt"></tbody></table></div>
+    <div style="text-align:center;font-size:.8rem;color:var(--text2)">你的猜测: <strong style="color:var(--accent)" id="mc">${mg.length}/8</strong></div>`;
+  const i=document.getElementById("mpi"),d=document.getElementById("mpd");
+  i.addEventListener("input",()=>{const q=i.value.trim();if(!q){d.classList.remove("show");d.innerHTML="";return}const r=searchPlayers(q);d.innerHTML=r.length?r.map(p=>`<div class="search-item" data-n="${p.name}"><span class="name">${p.name}</span><span class="team">${p.team}</span></div>`).join(""):'<div class="no-results">未找到</div>';d.classList.add("show")});
+  d.addEventListener("click",e=>{const el=e.target.closest(".search-item");if(!el)return;const p=PLAYERS.find(x=>x.name===el.dataset.n);if(p)mpGuess(p)});
+  i.addEventListener("keydown",e=>{if(e.key==="Enter"){const r=searchPlayers(i.value.trim());if(r.length)mpGuess(r[0])}});
+  mpUpdateOpp(); mpUpdateScore();
 }
-
-async function mpQuickMatch() {
-  const c = document.getElementById("mp-container");
-  c.innerHTML = `<div class="mp-waiting"><h3>🎲 正在匹配对手</h3><div class="spinner"></div><p style="color:var(--text2)">寻找在线玩家...</p><button class="btn btn-secondary" style="margin-top:16px" onclick="mpCancelMatch()">取消匹配</button></div>`;
-  // look for existing quick-match waiting room
-  const { data, error } = await sb.from("rooms").select("*").eq("status","waiting").is("p2_id",null).like("code","M%").order("created_at").limit(1);
-  if (error) { alert("匹配失败: "+error.message); mpRender("lobby"); return; }
-  if (data && data.length > 0) {
-    const room = data[0];
-    if (room.p1_id === mpPlayerId) { alert("不能匹配自己"); mpRender("lobby"); return; }
-    const { error: e2 } = await sb.from("rooms").update({ p2_id: mpPlayerId, status: "playing" }).eq("id", room.id);
-    if (e2) { alert("加入失败"); mpRender("lobby"); return; }
-    mpRoom = room; mpPlayerNum = 2; mpTarget = room.target_json;
-    mpSubscribe(room.id); mpRender("playing");
-    return;
-  }
-  // no waiting room — create one and wait
-  const code = "M" + Array.from({length:5}, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random()*36)]).join("");
-  const target = pickRandomTarget();
-  mpTarget = target;
-  const { data: d, error: e3 } = await sb.from("rooms").insert({ code, p1_id: mpPlayerId, target_name: target.name, target_json: target, status: "waiting" }).select().single();
-  if (e3) { alert("创建失败"); mpRender("lobby"); return; }
-  mpRoom = d; mpPlayerNum = 1;
-  mpSubscribe(d.id);
+function mpUpdateScore(){
+  const ss = document.querySelectorAll(".mp-score .s"); if(!ss.length) return;
+  if(ss[0]){ss[0].textContent=R.myScore;ss[0].style.color="#f97316"}
+  if(ss[1]){ss[1].textContent=R.oppScore;ss[1].style.color="#94a3b8"}
 }
-
-function mpCancelMatch() {
-  if (mpRoom) { sb.from("rooms").delete().eq("id", mpRoom.id).then(()=>{}); }
-  if (mpChannel) { sb.removeChannel(mpChannel); mpChannel = null; }
-  mpRoom = null; mpPlayerNum = null; mpGuesses = []; mpRender("lobby");
+function mpUpdateOpp(){
+  const el=document.getElementById("od"); if(!el) return;
+  const oc=document.getElementById("oc"); if(oc) oc.textContent=oppFB.length+"/8";
+  el.innerHTML=oppFB.map(c=>`<span style="background:${c==="correct"?"#22c55e":c==="close"?"#eab308":"#334155"};width:14px;height:14px;border-radius:3px;display:inline-block"></span>`).join("");
 }
-
-async function mpJoin() {
-  const code = document.getElementById("mp-join-code").value.trim().toUpperCase();
-  if (code.length !== 6) { alert("请输入6位房间码"); return; }
-  const { data, error } = await sb.from("rooms").select("*").eq("code", code).single();
-  if (error || !data) { alert("房间不存在"); return; }
-  if (data.status !== "waiting") { alert("房间已满或已结束"); return; }
-  if (data.p1_id === mpPlayerId) { alert("不能加入自己的房间"); return; }
-  const { error: e2 } = await sb.from("rooms").update({ p2_id: mpPlayerId, status: "playing" }).eq("id", data.id);
-  if (e2) { alert("加入失败"); return; }
-  mpRoom = data; mpPlayerNum = 2; mpTarget = data.target_json;
-  mpSubscribe(data.id);
-  mpRender("playing");
+function mpUpdateBoard(){
+  const tb=document.getElementById("mpt"); if(!tb) return;
+  if(tb.children.length===mg.length) return; // no new guesses
+  tb.innerHTML=mg.map((x,i)=>{const f=compareGuess(x,mt||{});return`<tr class="${i===mg.length-1?"row-latest":""} ${f.correct?"row-correct":""}"><td class="name-cell ${f.correct?"correct":"wrong"}">${f.nickname}</td>${renderCell(f.attributes.team)}${renderCell(f.attributes.position)}${renderCell(f.attributes.age)}${renderCell(f.attributes.championships)}${renderCell(f.attributes.mvp)}${renderCell(f.attributes.fmvp)}${renderCell(f.attributes.allNba)}${renderCell(f.attributes.status)}</tr>`}).join("");
 }
-
-function mpSubscribe(roomId) {
-  if (mpChannel) sb.removeChannel(mpChannel);
-  mpChannel = sb.channel("room-" + roomId)
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "rooms", filter: "id=eq." + roomId },
-      (payload) => {
-        const r = payload.new;
-        mpRoom = r;
-        if (r.status === "playing" && mpPlayerNum === 1) { mpRender("playing"); return; }
-        if (r.status === "finished") { if (!document.getElementById("mp-result-overlay")) { mpOppWon = mpPlayerNum === 1 ? r.p2_won : r.p1_won; mpRenderResult(c); } return; }
-        mpOppGuesses = mpPlayerNum === 1 ? r.p2_guesses : r.p1_guesses;
-        if (mpPlayerNum === 1 && r.p2_id && mpRoom.p2_id !== r.p2_id) { mpRoom = r; mpRender("playing"); return; }
-        mpRender("playing");
-      }
-    ).subscribe();
-}
-
-function mpRenderWaiting(c) {
-  c.innerHTML = `<div class="mp-waiting">
-    <h3>⏳ 等待对手加入</h3>
-    <div class="mp-create-code">${mpRoom.code}</div>
-    <p style="color:var(--text2)">将上方房间码发给对手</p>
-    <div class="spinner"></div>
-    <button class="btn btn-secondary" style="margin-top:16px" onclick="mpLeave()">取消</button>
-  </div>`;
-}
-
-function mpRenderBoard(c) {
-  const oppName = mpPlayerNum === 1 ? "玩家B" : "玩家A";
-  const oppGuesses = mpOppGuesses;
-  const oppOnline = (mpPlayerNum === 1 && mpRoom.p2_id) || (mpPlayerNum === 2);
-  c.innerHTML = `<div class="mp-game">
-    <div class="mp-opponent">
-      <div class="dot ${oppOnline ? 'online' : 'offline'}"></div>
-      <div class="info">
-        <div class="name">${oppName}</div>
-        <div class="status">${oppOnline ? '已猜测 ' + oppGuesses + '/8 次' : '未加入'}</div>
-      </div>
-      <div style="font-size:.75rem;color:var(--text2)">🎯 ${oppGuesses}/8</div>
-    </div>
-    <div class="search-wrap">
-      <input type="text" class="search-input" id="mp-guess-input" placeholder="输入球员名搜索..." autocomplete="off">
-      <div class="search-dropdown" id="mp-guess-dropdown"></div>
-    </div>
-    <div class="game-table-wrap">
-      <table class="game-table" id="mp-game-board">
-        <thead><tr><th>球员</th><th>队伍</th><th>位置</th><th>年龄</th><th>总冠军</th><th>MVP</th><th>FMVP</th><th>最佳阵容</th><th>状态</th></tr></thead>
-        <tbody id="mp-game-body"></tbody>
-      </table>
-    </div>
-    <div style="text-align:center;font-size:.8rem;color:var(--text2)">
-      你的猜测: <strong style="color:var(--accent)">${mpGuesses.length}/8</strong>
-    </div>
-  </div>`;
-  if (!mpMyWon && !mpOppWon) mpBindSearch();
-}
-
-function mpBindSearch() {
-  const input = document.getElementById("mp-guess-input");
-  const dropdown = document.getElementById("mp-guess-dropdown");
-  if (!input) return;
-  input.addEventListener("input", () => {
-    const q = input.value.trim();
-    dropdown.innerHTML = "";
-    if (!q) { dropdown.classList.remove("show"); return; }
-    const results = searchPlayers(q);
-    if (!results.length) { dropdown.innerHTML = '<div class="no-results">未找到</div>'; dropdown.classList.add("show"); return; }
-    dropdown.innerHTML = results.map(p => `<div class="search-item" data-name="${p.name}"><span class="name">${p.name}</span><span class="team">${p.team} · ${(p.points||0).toLocaleString()}分</span></div>`).join("");
-    dropdown.classList.add("show");
-  });
-  dropdown.addEventListener("click", (e) => {
-    const item = e.target.closest(".search-item");
-    if (!item) return;
-    const name = item.dataset.name;
-    const p = PLAYERS.find(pl => pl.name === name);
-    if (p) mpGuess(p);
-  });
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { const r = searchPlayers(input.value.trim()); if (r.length) mpGuess(r[0]); }
-  });
-  document.addEventListener("click", function mpClose(e) {
-    if (!input.contains(e.target) && !dropdown.contains(e.target)) dropdown.classList.remove("show");
-  });
-}
-
-function mpRenderBoardRow() {
-  const body = document.getElementById("mp-game-body");
-  if (!body) return;
-  body.innerHTML = mpGuesses.map((g, i) => {
-    const fb = compareGuess(g, mpTarget);
-    return `<tr class="${i === mpGuesses.length-1 ? 'row-latest' : ''} ${fb.correct ? 'row-correct' : ''}">
-      <td class="name-cell ${fb.correct ? 'correct' : 'wrong'}">${fb.nickname}</td>
-      ${renderCell(fb.attributes.team)} ${renderCell(fb.attributes.position)}
-      ${renderCell(fb.attributes.age)} ${renderCell(fb.attributes.championships)}
-      ${renderCell(fb.attributes.mvp)} ${renderCell(fb.attributes.fmvp)}
-      ${renderCell(fb.attributes.allNba)} ${renderCell(fb.attributes.status)}
-    </tr>`;
-  }).join("");
-}
-
-async function mpGuess(player) {
-  if (mpGuesses.length >= 8 || mpMyWon || mpOppWon || !mpRoom) return;
-  if (mpGuesses.some(g => g.name === player.name)) return;
-  mpGuesses.push(player);
-  mpRenderBoardRow();
-  const feedback = compareGuess(player, mpTarget);
-  const input = document.getElementById("mp-guess-input");
-  if (input) { input.value = ""; }
-  const dropdown = document.getElementById("mp-guess-dropdown");
-  if (dropdown) dropdown.classList.remove("show");
-
-  const myGuessCount = mpGuesses.length;
-  const col = mpPlayerNum === 1 ? "p1_guesses" : "p2_guesses";
-  await sb.from("rooms").update({ [col]: myGuessCount }).eq("id", mpRoom.id);
-
-  if (feedback.correct) {
-    mpMyWon = true;
-    recordGame("multi",true,mpGuesses.length);
-    const wcol = mpPlayerNum === 1 ? "p1_won" : "p2_won";
-    await sb.from("rooms").update({ [wcol]: true, status: "finished" }).eq("id", mpRoom.id);
-    mpRender("finished");
-  } else if (mpGuesses.length >= 8 && mpOppGuesses >= 8) {
-    recordGame("multi",false,8);
-    await sb.from("rooms").update({ status: "finished" }).eq("id", mpRoom.id);
-    mpRender("finished");
+async function mpGuess(p){
+  if(!mt||mg.length>=8||mg.some(x=>x.name===p.name))return;
+  mg.push(p); mpUpdateBoard(); document.getElementById("mc").textContent=mg.length+"/8";
+  document.getElementById("mpi").value=""; document.getElementById("mpd").classList.remove("show");
+  const fb=compareGuess(p,mt);
+  // Send hidden feedback to opponent (only color levels)
+  await sb("PATCH","rooms?id=eq."+R.id,{["p"+R.pnum+"_guess_feedback"]:mg.map(x=>{const f=compareGuess(x,mt);return f.correct?"correct":(Object.values(f.attributes).some(a=>a.level==="correct")?"close":"wrong")})});
+  if(!fb.correct&&mg.length<8)return;
+  // Round ended
+  roundActive=false; clearInterval(tmrId);
+  if(fb.correct){
+    const cr=(await sb("GET","rooms?id=eq."+R.id+"&select=*"))[0];
+    const mw=(cr["p"+R.pnum+"_rounds_won"]||0)+1;
+    const finished=mw>=Math.ceil(R.bo/2);
+    await sb("PATCH","rooms?id=eq."+R.id,{["p"+R.pnum+"_rounds_won"]:mw,match_status:finished?"finished":"round_over",target_player_name:mt.name,target_player_team:mt.team,target_player_rank:mt.rank,target_player_points:mt.points});
+  }else{
+    await sb("PATCH","rooms?id=eq."+R.id,{match_status:"round_over",target_player_name:mt.name,target_player_team:mt.team,target_player_rank:mt.rank,target_player_points:mt.points});
   }
 }
-
-function mpRenderResult(c) {
-  if (document.getElementById("mp-result-overlay")) return;
-  let cls, title, detail;
-  if (mpMyWon) {
-    cls = "win"; title = "🎉 你赢了！";
-    detail = `你用了 ${mpGuesses.length} 次猜中了 <strong>${mpTarget.name}</strong>！`;
-  } else if (mpOppWon) {
-    cls = "lose"; title = "😢 对手先猜对了";
-    detail = `答案是 <strong>${mpTarget.name}</strong>（${mpTarget.team} · ${mpTarget.position}）`;
-  } else {
-    cls = "draw"; title = "🤝 平局";
-    detail = `双方都没猜中，答案是 <strong>${mpTarget.name}</strong>（${mpTarget.team} · ${mpTarget.position}）`;
-  }
-  const el = document.createElement("div");
-  el.className = "mp-result " + cls; el.id = "mp-result-overlay";
-  el.innerHTML = `<h3>${title}</h3><p>${detail}</p>
-    <p style="font-size:.8rem;color:var(--text2)">历史得分榜第 ${mpTarget.rank} 名 · ${mpTarget.points.toLocaleString()} 分</p>
-    <button class="btn btn-primary" style="margin-top:12px" onclick="mpLeave()">返回大厅</button>`;
-  c.appendChild(el);
+// === Polling (replaces WebSocket) ===
+function mpPoll(rid){
+  mpStop();
+  pollId=setInterval(async()=>{
+    try{const l=await sb("GET","rooms?id=eq."+rid+"&select=*");if(!l||!l.length)return;const r=l[0];
+    const op=R.pnum===1?2:1;
+    // Update scores
+    const ms=r["p"+R.pnum+"_rounds_won"]||0, os=r["p"+op+"_rounds_won"]||0;
+    if(ms!==R.myScore||os!==R.oppScore){R.myScore=ms;R.oppScore=os;mpUpdateScore()}
+    // Detect state transitions
+    if(R.status!=="playing"&&R.status!=="found")return; // lobby/searching don't poll state
+    if(r.p1_ready&&r.p2_ready&&r.match_status==="found"){await mpStartRound(r);return}
+    if(r.match_status==="round_over"){mpEndRound(r);return}
+    if(r.match_status==="finished"){mpMatchResult(document.getElementById("mp-container"));return}
+    // Update opponent feedback
+    if(r.match_status==="playing"){oppFB=r["p"+op+"_guess_feedback"]||[];mpUpdateOpp();mpUpdateScore()}
+    // Update ready status text
+    const st=document.getElementById("rdys");if(st)st.textContent=R.pnum===1?(r.p2_id?"对手已加入":"等待对手..."):"等待双方准备...";
+    }catch(e){}
+  },POLL_MS);
 }
-
-async function mpLeave() {
-  if (mpRoom && mpRoom.status === "waiting") {
-    await sb.from("rooms").delete().eq("id", mpRoom.id);
-  }
-  if (mpChannel) { sb.removeChannel(mpChannel); mpChannel = null; }
-  mpRoom = null; mpPlayerNum = null; mpTarget = null;
-  mpGuesses = []; mpOppGuesses = 0; mpMyWon = false; mpOppWon = false;
-  const ov = document.getElementById("mp-result-overlay"); if (ov) ov.remove();
-  const board = document.getElementById("mp-game-board"); if (board) board.remove(); const gameBoard = document.getElementById("mp-game-board");
-  mpRender("lobby");
+function mpStop(){if(pollId){clearInterval(pollId);pollId=null}if(tmrId){clearInterval(tmrId);tmrId=null}}
+// === Round Start ===
+async function mpStartRound(r){
+  R.round=r.round||1; mg=[]; oppFB=[]; roundActive=true;
+  target=PLAYERS[Math.floor(Math.random()*PLAYERS.length)];
+  clockAnchor={server:Date.now()+ROUND_MS,client:Date.now()};
+  await sb("PATCH","rooms?id=eq."+r.id,{match_status:"playing",round:R.round,timer_end:new Date(Date.now()+ROUND_MS+2000).toISOString(),p1_guess_feedback:[],p2_guess_feedback:[],p1_ready:false,p2_ready:false,target_json:target});
+  mp("playing"); mpStartTimer();
 }
-
-// ============ TAB SWITCH (patch into existing logic) ============
-// Override the tab click handler to also handle multi tab
-const origTabHandler = document.querySelector(".tab")?.onclick;
+// === Timer (clock-synced) ===
+function mpStartTimer(){
+  if(tmrId)clearInterval(tmrId);
+  tmrId=setInterval(()=>{
+    if(!clockAnchor)return;
+    const remain=Math.max(0,Math.ceil((clockAnchor.server-Date.now())/1000));
+    const el=document.getElementById("t"); if(!el){clearInterval(tmrId);return}
+    el.textContent=remain; el.className="mp-timer "+(remain>60?"safe":remain>20?"warn":"danger");
+    if(remain<=0){clearInterval(tmrId);mpOnTimeout()}
+  },500);
+}
+async function mpOnTimeout(){
+  if(!roundActive)return;
+  const r=await sb("GET","rooms?id=eq."+R.id+"&select=*");
+  if(r[0]&&r[0].match_status==="playing"){roundActive=false;await sb("PATCH","rooms?id=eq."+r[0].id,{match_status:"round_over",target_player_name:mt.name,target_player_team:mt.team,target_player_rank:mt.rank,target_player_points:mt.points})}
+}
+// === Round / Match End (AnswerOverlay) ===
+function mpEndRound(r){
+  clearInterval(tmrId); roundActive=false;
+  const t=r.target_json||mt; if(!t||!t.name) return setTimeout(()=>mpEndRound(r),500);
+  R.myScore=r["p"+R.pnum+"_rounds_won"]||0; R.oppScore=r["p"+(R.pnum===1?2:1)+"_rounds_won"]||0;
+  mpUpdateScore();
+  const needed=Math.ceil(R.bo/2);
+  const iWon=(r["p"+R.pnum+"_rounds_won"]||0)>(R._mw||0); R._mw=r["p"+R.pnum+"_rounds_won"];
+  const ov=document.createElement("div"); ov.id="mp-overlay"; ov.className="mp-overlay";
+  ov.innerHTML=`<div class="mp-modal ${iWon?"win":"draw"}"><h3>${iWon?"🎉 你猜中了！":"⏰ 时间到"}</h3>
+    <div style="font-size:1.3rem;font-weight:800;margin:8px 0">${t.name}</div>
+    <p style="color:var(--text2)">${t.team} · ${t.position}</p>
+    <div class="mp-grid"><span class="k">总冠军</span><span class="v">${t.championships}</span><span class="k">MVP</span><span class="v">${t.mvp}</span><span class="k">FMVP</span><span class="v">${t.fmvp}</span><span class="k">最佳阵容</span><span class="v">${t.allNba}次</span><span class="k">排名</span><span class="v">第${t.rank}名</span><span class="k">得分</span><span class="v">${t.points.toLocaleString()}</span></div>
+    <div style="margin:12px 0"><span style="font-weight:700">${R.myScore}</span> : <span style="font-weight:700">${R.oppScore}</span></div>
+    ${R.myScore<needed&&R.oppScore<needed?`<p style="font-size:.75rem;color:var(--text2)">${NEXT_DELAY/1000}秒后自动下一轮</p>`:""}
+    <button class="btn btn-primary" style="margin-top:8px" onclick="mpNext()">${R.myScore>=needed||R.oppScore>=needed?"查看结果":"下一轮"}</button></div>`;
+  document.body.appendChild(ov);
+  if(R.myScore<needed&&R.oppScore<needed) setTimeout(()=>{const o=document.getElementById("mp-overlay");if(o)mpNext()},NEXT_DELAY);
+}
+async function mpNext(){
+  const o=document.getElementById("mp-overlay"); if(o)o.remove();
+  const needed=Math.ceil(R.bo/2);
+  if(R.myScore>=needed||R.oppScore>=needed){mpMatchResult(document.getElementById("mp-container"));return}
+  R.round++; await sb("PATCH","rooms?id=eq."+R.id,{round:R.round,match_status:"found",p1_ready:false,p2_ready:false}); mp("found");
+}
+function mpMatchResult(v){
+  mpStop(); const o=document.getElementById("mp-overlay"); if(o)o.remove();
+  const won=R.myScore>=Math.ceil(R.bo/2);
+  v.innerHTML=`<div class="mp-victory"><h2>${won?"🎉 你赢下了整场比赛！":"😢 对手获胜"}</h2><div style="font-size:2.5rem;font-weight:800;margin:16px 0"><span style="color:${won?"#f97316":"#94a3b8"}">${R.myScore}</span>:<span style="color:${won?"#94a3b8":"#f97316"}">${R.oppScore}</span></div><p style="color:var(--text2)">${won?"率先拿下赛点":"对手率先拿下赛点"} · BO${R.bo}</p><button class="btn btn-primary" style="margin-top:16px" onclick="mpLeave()">返回大厅</button></div>`;
+}
+function mpLeave(){
+  mpStop(); mg=[]; oppFB=[]; target=null; roundActive=false;
+  R={id:null,pnum:null,myScore:0,oppScore:0,status:"lobby",round:1,bo:2};
+  const o=document.getElementById("mp-overlay"); if(o)o.remove();
+  mp("lobby");
+}
+// Init
+mp("lobby");
 
 // ============ INIT ============
 newGame();
