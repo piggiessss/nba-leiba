@@ -992,7 +992,7 @@ function mpPoll(rid){
     const ms=r["p"+R.pnum+"_rounds_won"]||0, os=r["p"+op+"_rounds_won"]||0;
     if(ms!==R.myScore||os!==R.oppScore){R.myScore=ms;R.oppScore=os;mpUpdateScore()}
     // Detect state transitions
-    if(R.status==="searching"&&r.p2_id&&r.match_status==="matching"){R.status="found";await sb("PATCH","rooms?id=eq."+r.id,{match_status:"found"});mp("found");return}
+    if(R.status==="searching"&&r.p2_id&&(r.match_status==="matching"||r.match_status==="found")){R.status="found";if(r.match_status==="matching")await sb("PATCH","rooms?id=eq."+r.id,{match_status:"found"});mp("found");return}
     if(R.status!=="playing"&&R.status!=="found")return; // lobby/searching don't poll state
     if(r.p1_ready&&r.p2_ready&&r.match_status==="found"){await mpStartRound(r);return}
     if(r.match_status==="found"&&r.p2_id&&!r.p2_ready&&Date.now()-new Date(r.created_at).getTime()>120000){await sb("DELETE","rooms?id=eq."+r.id);mpStop();mp("lobby");alert("对手超时未准备");return}
