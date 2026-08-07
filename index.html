@@ -147,6 +147,11 @@ header .sub{color:var(--text2);font-size:.75rem;margin-top:2px}
 .daily-status .countdown{font-size:.85rem;color:var(--text2);margin-top:8px}
 .daily-answered{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3)}
 .daily-answered h3{color:#4ade80}
+.mp-result-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;display:flex;align-items:center;justify-content:center}
+.mp-result{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px 32px;max-width:400px;width:90%;text-align:center}
+.mp-result.win{border-color:rgba(34,197,94,.3);box-shadow:0 0 30px rgba(34,197,94,.15)}
+.mp-result.lose{border-color:rgba(239,68,68,.3);box-shadow:0 0 30px rgba(239,68,68,.15)}
+.mp-result.draw{border-color:rgba(250,204,21,.3)}
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
@@ -1116,6 +1121,7 @@ async function mpLeave() {
   mpRoom = null; mpPlayerNum = null; mpTarget = null;
   mpGuesses = []; mpOppGuesses = 0; mpMyWon = false; mpOppWon = false;
   const ov = document.getElementById("mp-result-overlay"); if (ov) ov.remove();
+  const board = document.getElementById("mp-game-board"); if (board) board.remove(); const gameBoard = document.getElementById("mp-game-board");
   mpRender("lobby");
 }
 
