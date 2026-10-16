@@ -79,9 +79,19 @@ const SUPABASE_URL = "https://bufvapllekiobkirndyj.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZnZhcGxsZWtpb2JraXJuZHlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwNDI3OTIsImV4cCI6MjEwMTYxODc5Mn0.40q4bwEZZIkazJ-v-wJpwN3NbkeILCGwuns3ii9fxPE";
 const SB = SUPABASE_URL + "/rest/v1";
 const H = (m) => ({method: m, headers: {"apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY, "Content-Type": "application/json", "Prefer": "return=representation"}, body: undefined});
-async function api(m, path, d) { const o = H(m); if (d) o.body = JSON.stringify(d); const r = await fetch(SB + "/" + path, o); if (!r.ok) throw new Error(r.status); return r.json() }
+async function api(m, path, d) {
+  const o = H(m); if (d) o.body = JSON.stringify(d);
+  const controller = new AbortController(); o.signal = controller.signal;
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const r = await fetch(SB + "/" + path, o);
+    if (!r.ok) { const e = new Error("HTTP " + r.status); e.status = r.status; throw e }
+    const text = await r.text(); return text ? JSON.parse(text) : [];
+  } finally { clearTimeout(timeout) }
+}
+// Each page owns its matchmaking identity; tabs must not share a player slot.
+const pid = crypto.randomUUID();
 
-const pid = localStorage.getItem("c_pid") || (() => { const id = crypto.randomUUID(); localStorage.setItem("c_pid", id); return id })();
 
 const PLAYERS = [
   {name:"勒布朗·詹姆斯",nameEn:"LeBron James",team:"76人",number:23,position:"小前锋",age:41,championships:4,mvp:4,fmvp:4,allNba:21,isActive:true,difficulty:"easy",points:43440,rank:1},
@@ -370,40 +380,147 @@ function render(s) {
   else if (s === "match-end") renderMatchEnd(v);
 }
 function setBO(n) { boTarget = n }
-async function startSearch() {
-  render("searching");
-  const list = await api("GET", "rooms?match_status=eq.matching&p2_id=is.null&order=created_at&limit=1&select=*");
-  if (list && list.length && list[0].p1_id !== pid) {
-    const r = list[0]; await api("PATCH", "rooms?id=eq." + r.id, { p2_id: pid, match_status: "found" });
-    room = r; pNum = 2; myW = 0; oppW = 0; startPoll(r.id); render("found"); return;
+const ROOM_TTL = 120000, SEARCH_LIMIT = 90000;
+let searchRun = null, pollGeneration = 0;
+const eq = value => encodeURIComponent(value);
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const retryable = e => !e.status || e.status === 408 || e.status === 429 || e.status >= 500;
+async function retryMatch(fn) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await fn() } catch (e) {
+      if (!retryable(e) || attempt >= 2) throw e;
+      await sleep(250 * 2 ** attempt + Math.random() * 250);
+    }
   }
-  const d = await api("POST", "rooms", { code: Array.from({ length: 6 }, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)]).join(""), p1_id: pid, match_status: "matching", p1_rounds_won: 0, p2_rounds_won: 0, round: 1 });
-  if (!d || !d.length) { render("lobby"); return }
-  room = d[0]; pNum = 1; myW = 0; oppW = 0; startPoll(d[0].id);
+}
+function activeSearch(run) { return searchRun === run && !run.cancelled }
+function resetMatch(message) {
+  stopPoll(); clearInterval(tmr); tmr = null;
+  room = null; pNum = null; roundActive = false; clockAnchor = null;
+  myW = oppW = 0; guesses = []; oppFB = []; target = null;
+  render("lobby");
+  if (message) { const p = document.createElement("p"); p.textContent = message; document.getElementById("view").appendChild(p) }
+}
+async function releaseSearchRoom(id) {
+  // Never delete playing/finished rooms or rooms owned by somebody else.
+  return retryMatch(() => api("DELETE", "rooms?id=eq." + eq(id) +
+    "&match_status=in.(matching,found)&or=(p1_id.eq." + eq(pid) + ",p2_id.eq." + eq(pid) + ")"));
+}
+async function startSearch() {
+  if (searchRun || room) return;
+  const run = { cancelled: false, pending: null, started: Date.now() };
+  searchRun = run; render("searching");
+  try {
+    const cutoff = new Date(Date.now() - ROOM_TTL).toISOString();
+    // Cleanup and claim use disjoint predicates, evaluated by the database.
+    await retryMatch(() => api("DELETE", "rooms?match_status=eq.matching&p2_id=is.null&created_at=lt." + eq(cutoff)));
+    for (let attempt = 0; attempt < 4 && activeSearch(run); attempt++) {
+      const list = await retryMatch(() => api("GET", "rooms?match_status=eq.matching&p2_id=is.null&p1_id=neq." + eq(pid) +
+        "&created_at=gte." + eq(new Date(Date.now() - ROOM_TTL).toISOString()) + "&order=created_at&limit=5&select=*"));
+      for (const candidate of list) {
+        if (!activeSearch(run)) return;
+        run.pending = candidate.id;
+        const claimed = await retryMatch(async () => {
+          // Also reconciles a successful PATCH whose response was lost.
+          const current = (await api("GET", "rooms?id=eq." + eq(candidate.id) + "&select=*"))[0];
+          if (current && current.p2_id === pid && current.match_status === "found") return [current];
+          return api("PATCH", "rooms?id=eq." + eq(candidate.id) +
+            "&match_status=eq.matching&p2_id=is.null&p1_id=neq." + eq(pid) +
+            "&created_at=gte." + eq(new Date(Date.now() - ROOM_TTL).toISOString()),
+            { p2_id: pid, match_status: "found" });
+        });
+        if (!activeSearch(run)) { await releaseSearchRoom(candidate.id); return }
+        run.pending = null;
+        if (!claimed.length) continue; // Lost the race: no local P2 state is committed.
+        room = claimed[0]; pNum = 2; myW = oppW = 0;
+        render("found"); startPoll(room.id); return;
+      }
+      if (list.length) { await sleep(150 + Math.random() * 350); continue }
+      // Explicit ID makes POST retries idempotent, including lost responses.
+      run.pending = crypto.randomUUID();
+      const id = run.pending;
+      const payload = { id, code: id.replace(/-/g, "").slice(0, 6).toUpperCase(), p1_id: pid,
+        match_status: "matching", p1_rounds_won: 0, p2_rounds_won: 0, round: 1 };
+      const created = await retryMatch(async () => {
+        const existing = await api("GET", "rooms?id=eq." + eq(id) + "&select=*");
+        if (existing.length) return existing;
+        try { return await api("POST", "rooms", payload) } catch (e) {
+          if (e.status === 409) { const rows = await api("GET", "rooms?id=eq." + eq(id) + "&select=*"); if (rows.length) return rows }
+          throw e;
+        }
+      });
+      if (!activeSearch(run)) { await releaseSearchRoom(id); return }
+      if (!created.length || created[0].p1_id !== pid) throw new Error("创建匹配房间失败");
+      run.pending = null; room = created[0]; pNum = 1; startPoll(room.id); return;
+    }
+    if (activeSearch(run)) throw new Error("房间竞争繁忙，请重试");
+  } catch (e) {
+    if (activeSearch(run)) { run.cancelled = true; resetMatch("匹配失败，请检查网络后重试。"); console.warn("Matchmaking failed", e) }
+  } finally {
+    if (run.pending) {
+      try { await releaseSearchRoom(run.pending) } catch (e) { console.warn("Room cleanup failed; waiting room expires automatically", e) }
+    }
+    if (searchRun === run) searchRun = null;
+  }
 }
 function startPoll(rid) {
-  stopPoll(); rPoll = setInterval(async () => {
+  stopPoll(); const generation = pollGeneration;
+  let failures = 0, waitingSince = Date.now();
+  const tick = async () => {
     try {
-      const l = await api("GET", "rooms?id=eq." + rid + "&select=*"); if (!l || !l.length) return; const r = l[0]; room = r;
-      if (r.timer_end) clockAnchor = { serverNow: new Date(r.timer_end).getTime(), clientNow: Date.now() };
+      const l = await api("GET", "rooms?id=eq." + eq(rid) + "&select=*");
+      if (generation !== pollGeneration) return;
+      if (!l.length) { resetMatch("房间已失效，请重新匹配。"); return }
+      const r = l[0];
+      if (r["p" + pNum + "_id"] !== pid) { resetMatch("匹配身份已失效，请重试。"); return }
+      failures = 0; room = r;
       const op = pNum === 1 ? 2 : 1;
-      if (r.p1_ready && r.p2_ready && r.match_status === "found") { startRound(r); return }
-      if (r.match_status === "playing") { oppFB = r["p" + op + "_guess_feedback"] || []; updateOpp(); return }
-      if (r.match_status === "round_end") { stopPoll(); endRound(r); return }
-      if (r.match_status === "match_end") { stopPoll(); matchEnd(); return }
-      const st = document.getElementById("rdy-status"); if (st) st.textContent = pNum === 1 ? (r.p2_id ? "对手已加入" : "等待对手加入...") : "等待双方准备...";
-    } catch (e) { }
-  }, POLL_MS);
+      if (r.match_status === "matching" && !r.p2_id) {
+        if (Date.now() - waitingSince >= SEARCH_LIMIT) { await cancel(); return }
+      } else if (r.match_status === "found" || (r.match_status === "matching" && r.p2_id)) {
+        if (Date.now() - waitingSince >= ROOM_TTL) { await cancel(); return }
+        if (!document.getElementById("rdy-btn")) render("found");
+        if (r.p1_ready && r.p2_ready) { await startRound(r); return }
+      } else if (r.match_status === "playing") {
+        if (!roundActive) {
+          target = r.target_json; roundN = r.round || 1; roundActive = true;
+          clockAnchor = { serverNow: new Date(r.timer_end).getTime(), clientNow: Date.now() };
+          render("playing"); startTimer();
+        }
+        oppFB = r["p" + op + "_guess_feedback"] || []; updateOpp();
+      } else if (r.match_status === "round_end") { stopPoll(); await endRound(r); return }
+      else if (r.match_status === "match_end") { stopPoll(); matchEnd(); return }
+      const st = document.getElementById("rdy-status"); if (st) st.textContent = "等待双方准备...";
+    } catch (e) {
+      if (generation !== pollGeneration) return;
+      if (++failures >= 3) { await cancel(); return }
+    } finally {
+      // Schedule after completion: slow requests never overlap or revive old polls.
+      if (generation === pollGeneration) rPoll = setTimeout(tick, POLL_MS * Math.max(1, failures));
+    }
+  };
+  rPoll = setTimeout(tick, 0);
 }
-function stopPoll() { if (rPoll) { clearInterval(rPoll); rPoll = null } }
-async function doReady() { await api("PATCH", "rooms?id=eq." + room.id, { ["p" + pNum + "_ready"]: true }); document.getElementById("rdy-btn").disabled = true; document.getElementById("rdy-btn").textContent = "已准备 ✓" }
+function stopPoll() { pollGeneration++; if (rPoll) clearTimeout(rPoll); rPoll = null }
+async function doReady() {
+  const button = document.getElementById("rdy-btn"), id = room?.id, player = pNum;
+  if (!id || !button) return; button.disabled = true;
+  try {
+    const rows = await retryMatch(() => api("PATCH", "rooms?id=eq." + eq(id) +
+      "&match_status=eq.found&p" + player + "_id=eq." + eq(pid), { ["p" + player + "_ready"]: true }));
+    if (room?.id === id && button.isConnected) { if (!rows.length) throw new Error("房间状态已改变"); button.textContent = "已准备 ✓" }
+  } catch (e) { if (button.isConnected) { button.disabled = false; button.textContent = "准备失败，点击重试" } }
+}
 async function startRound(r) {
-  roundN = r.round || 1; guesses = []; oppFB = []; roundActive = true;
-  target = PLAYERS[Math.floor(Math.random() * PLAYERS.length)];
-  const endTime = new Date(Date.now() + ROUND_MS).toISOString();
-  await api("PATCH", "rooms?id=eq." + r.id, { match_status: "playing", round: roundN, timer_end: endTime, p1_guess_feedback: [], p2_guess_feedback: [], p1_ready: false, p2_ready: false, target_json: target, target_player_name: target.name, target_player_team: target.team, target_player_rank: target.rank, target_player_points: target.points });
-  clockAnchor = { serverNow: Date.now() + ROUND_MS, clientNow: Date.now() };
-  render("playing"); startTimer();
+  const chosen = PLAYERS[Math.floor(Math.random() * PLAYERS.length)];
+  // Exactly one ready client initializes the shared target and timer.
+  await api("PATCH", "rooms?id=eq." + eq(r.id) + "&match_status=eq.found&p1_ready=eq.true&p2_ready=eq.true", {
+    match_status: "playing", round: r.round || 1, timer_end: new Date(Date.now() + ROUND_MS).toISOString(),
+    p1_guess_feedback: [], p2_guess_feedback: [], p1_ready: false, p2_ready: false,
+    target_json: chosen, target_player_name: chosen.name, target_player_team: chosen.team,
+    target_player_rank: chosen.rank, target_player_points: chosen.points
+  });
+  // Both clients enter playing only from the persisted row on the next poll.
 }
 function renderGame(v) {
   v.innerHTML = `<div class="timer safe" id="timer">120</div>
@@ -474,7 +591,15 @@ function matchEnd() {
     <p style="color:var(--text2)">${won ? "率先拿下赛点" : "对手率先拿下赛点"} · BO${boTarget}</p>
     <button class="btn btn-primary" style="margin-top:16px" onclick="quit()">返回大厅</button></div>`;
 }
-async function cancel() { if (room) await api("DELETE", "rooms?id=eq." + room.id); stopPoll(); room = null; render("lobby") }
-function quit() { stopPoll(); room = null; myW = 0; oppW = 0; guesses = []; target = null; render("lobby") }
+async function cancel() {
+  const run = searchRun, id = room?.id;
+  if (run) run.cancelled = true;
+  resetMatch();
+  // Keep the run locked until its in-flight write has been reconciled in finally.
+  if (id) {
+    try { await releaseSearchRoom(id) } catch (e) { console.warn("Cancel cleanup failed", e) }
+  }
+}
+function quit() { cancel() }
 render("lobby");
 </script></body></html>
